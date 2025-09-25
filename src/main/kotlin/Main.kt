@@ -98,4 +98,6 @@ fun main() {
     dictionary.forEach { println(it) }
 
     val dictionary = loadDictionary()
+    val learnedList = learnedList(dictionary)
+    println(learnedList)
 }
