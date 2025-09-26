@@ -12,7 +12,7 @@ data class Word(
     var correctAnswersCount: Int = 0,
 )
 
-fun loadDictionary(): MutableList<Word> {
+fun loadDictionary(): List<Word> {
     val dictionaryFile = File("words.txt")
     val lines = dictionaryFile.readLines()
 
