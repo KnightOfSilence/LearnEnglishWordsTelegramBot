@@ -1,6 +1,7 @@
 import java.io.File
 
 const val LEARNING_THRESHOLD = 3
+const val FIRST_FOUR_WORDS_TO_TAKE = 4
 
 val wordsFile = File("words.txt")
 val dictionary = mutableListOf<Word>()
@@ -73,11 +74,11 @@ fun learnWords(dictionary: MutableList<Word>) {
             println("Все слова в словаре выучены!")
             break
         } else {
-            val questionWords = notLearnedList.shuffled().take(4)
+            val questionWords = notLearnedList.shuffled().take(FIRST_FOUR_WORDS_TO_TAKE)
             val correctAnswer = questionWords.random()
 
             println()
-            println("${correctAnswer.english}:")
+            println("${correctAnswer.english}: ")
 
             val shuffledOption = questionWords.shuffled()
             shuffledOption.forEachIndexed { index, word -> println("${index + 1} - ${word.russian}") }
@@ -124,20 +125,11 @@ fun saveDictionary(dictionary: MutableList<Word>) {
 }
 
 fun main() {
-
-    val lines: List<String> = wordsFile.readLines()
-
-    for (line in lines) {
-        val parts = line.split("|")
-        val correctAnswers = parts.getOrNull(2)?.toIntOrNull() ?: 0
-        val word =
-            Word(english = parts[0], russian = parts[1], correctAnswersCount = correctAnswers)
-        dictionary.add(word)
-    }
+    loadDictionary()
+    calculateStatistics(dictionary)
     println("Содержимое словаря:")
     dictionary.forEach { println(it) }
 
-    val dictionary = loadDictionary()
     val learnedList = learnWords(dictionary)
     println(learnedList)
 }
