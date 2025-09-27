@@ -43,7 +43,7 @@ fun showStartScreen() {
 
             2 -> {
                 "Статистика"
-                calculateStatistics(dictionary)
+                println(calculateStatistics(dictionary))
             }
 
             3 -> {
@@ -126,10 +126,5 @@ fun saveDictionary(dictionary: MutableList<Word>) {
 
 fun main() {
     loadDictionary()
-    calculateStatistics(dictionary)
-    println("Содержимое словаря:")
-    dictionary.forEach { println(it) }
-
-    val learnedList = learnWords(dictionary)
-    println(learnedList)
+    println(learnWords(dictionary))
 }
