@@ -38,7 +38,7 @@ fun showStartScreen() {
         when (userChoice) {
             1 -> {
                 "Учить слова"
-                learnWords(dictionary)
+                println(learnWords(dictionary))
             }
 
             2 -> {
@@ -126,5 +126,5 @@ fun saveDictionary(dictionary: MutableList<Word>) {
 
 fun main() {
     loadDictionary()
-    println(learnWords(dictionary))
+    learnWords(dictionary)
 }
