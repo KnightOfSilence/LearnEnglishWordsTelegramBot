@@ -7,8 +7,8 @@ val wordsFile = File("words.txt")
 val dictionary = mutableListOf<Word>()
 
 data class Word(
-    val english: String,
-    val russian: String,
+    val original: String,
+    val translated: String,
     var correctAnswersCount: Int = 0,
 )
 
@@ -20,7 +20,7 @@ fun loadDictionary(): List<Word> {
         val parts = line.split("|")
         val correctAnswers = parts.getOrNull(2)?.toIntOrNull() ?: 0
         val word =
-            Word(english = parts[0], russian = parts[1], correctAnswersCount = correctAnswers)
+            Word(original = parts[0], translated = parts[1], correctAnswersCount = correctAnswers)
         dictionary.add(word)
     }
     return dictionary
@@ -78,10 +78,10 @@ fun learnWords(dictionary: MutableList<Word>) {
             val correctAnswer = questionWords.random()
 
             println()
-            println("${correctAnswer.english}: ")
+            println("${correctAnswer.original}: ")
 
             val shuffledOption = questionWords.shuffled()
-            shuffledOption.forEachIndexed { index, word -> println("${index + 1} - ${word.russian}") }
+            shuffledOption.forEachIndexed { index, word -> println("${index + 1} - ${word.translated}") }
             println("----------")
             println("0 - Меню")
             println("Ваш ответ(введите номер): ")
@@ -101,8 +101,8 @@ fun learnWords(dictionary: MutableList<Word>) {
 
                     } else {
                         println(
-                            "Неправильно! ${correctAnswer.english} " +
-                                    "– это ${correctAnswer.russian}"
+                            "Неправильно! ${correctAnswer.original} " +
+                                    "– это ${correctAnswer.translated}"
                         )
                     }
                 }
@@ -115,11 +115,11 @@ fun learnWords(dictionary: MutableList<Word>) {
     }
 }
 
-fun saveDictionary(dictionary: MutableList<Word>) {
+fun saveDictionary(dictionary: List<Word>) {
 
     wordsFile.bufferedWriter().use { out ->
         dictionary.forEach { word ->
-            out.write("${word.english}|${word.russian}|${word.correctAnswersCount}\n")
+            out.write("${word.original}|${word.translated}|${word.correctAnswersCount}\n")
         }
     }
 }
