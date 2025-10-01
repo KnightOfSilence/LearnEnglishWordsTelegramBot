@@ -46,7 +46,7 @@ fun showStartScreen() {
                 println(calculateStatistics(dictionary))
             }
 
-            3 -> {
+            0 -> {
                 "Выход"
                 break
             }
@@ -89,7 +89,7 @@ fun learnWords(dictionary: MutableList<Word>) {
             when (userAnswerInput) {
                 0 -> {
                     "Выход в главное меню"
-                    showStartScreen()
+                    break
                 }
 
                 in 1..questionWords.size -> {
@@ -126,5 +126,5 @@ fun saveDictionary(dictionary: List<Word>) {
 
 fun main() {
     loadDictionary()
-    learnWords(dictionary)
+    showStartScreen()
 }
