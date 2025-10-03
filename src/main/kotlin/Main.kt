@@ -1,4 +1,5 @@
 import java.io.File
+import kotlin.concurrent.timer
 
 const val LEARNING_THRESHOLD = 3
 const val FIRST_FOUR_WORDS_TO_TAKE = 4
@@ -98,12 +99,15 @@ fun learnWords(dictionary: MutableList<Word>) {
                         println("Правильно!")
                         correctAnswer.correctAnswersCount++
                         saveDictionary(dictionary)
+                        Thread.sleep(2000)
+                        println()
 
                     } else {
                         println(
                             "Неправильно! ${correctAnswer.original} " +
                                     "– это ${correctAnswer.translated}"
                         )
+                        Thread.sleep(2000)
                     }
                 }
 
