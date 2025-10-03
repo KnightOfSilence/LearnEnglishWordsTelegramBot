@@ -4,7 +4,7 @@ const val LEARNING_THRESHOLD = 3
 const val FIRST_FOUR_WORDS_TO_TAKE = 4
 
 val wordsFile = File("words.txt")
-val dictionary = mutableListOf<Word>()
+var dictionary = mutableListOf<Word>()
 
 data class Word(
     val original: String,
