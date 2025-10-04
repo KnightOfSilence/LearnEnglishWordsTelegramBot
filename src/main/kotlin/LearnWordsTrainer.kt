@@ -34,16 +34,23 @@ class LearnWordsTrainer(
 
     fun getNextQuestion(): Question? {
         val notLearnedWords = dictionary.filter { it.correctAnswersCount < learnedWordsThreshold }
+        val learnedWords = dictionary.filter { it.correctAnswersCount >= learnedWordsThreshold }
+
         if (notLearnedWords.isEmpty()) {
             return null
         }
-
-        val questionWords = notLearnedWords.shuffled().take(minOf(notLearnedWords.size, numberOfOptions))
-        val correctWord = questionWords.random()
+        val questionWords = mutableListOf<Word>()
+        questionWords.addAll(notLearnedWords)
+        val remainingOptions = numberOfOptions - questionWords.size
+        if (remainingOptions > 0) {
+            questionWords.addAll(learnedWords.shuffled().take(remainingOptions))
+        }
+        val finalVariants = questionWords.shuffled().take(numberOfOptions)
+        val correctWord = notLearnedWords.random()
 
         currentQuestion = Question(
             correctWord = correctWord,
-            variants = questionWords.shuffled()
+            variants = finalVariants.shuffled() // Еще раз перемешиваем для надежности
         )
         return currentQuestion
     }
@@ -60,7 +67,7 @@ class LearnWordsTrainer(
         return false
     }
 
-    private fun loadDictionary(): MutableList<Word> {
+    private fun loadDictionary(): List<Word> {
         if (!wordsFile.exists()) {
             println("Файл со словарем не найден. Создан новый.")
             wordsFile.createNewFile()
