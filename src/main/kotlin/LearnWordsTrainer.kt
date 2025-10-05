@@ -8,7 +8,7 @@ data class Word(
 
 data class Question(
     val correctWord: Word,
-    val variants: List<Word>, // Перемешанные варианты для вывода
+    val variants: List<Word>,
 )
 
 data class Statistics(
@@ -22,7 +22,7 @@ class LearnWordsTrainer(
     private val learnedWordsThreshold: Int = 3,
     private val numberOfOptions: Int = 4,
 ) {
-    var currentQuestion: Question? = null // Текущий вопрос, на который отвечает пользователь
+    var currentQuestion: Question? = null
     val dictionary = loadDictionary()
 
     fun getStatistics(): Statistics {
@@ -46,11 +46,11 @@ class LearnWordsTrainer(
             questionWords.addAll(learnedWords.shuffled().take(remainingOptions))
         }
         val finalVariants = questionWords.shuffled().take(numberOfOptions)
-        val correctWord = notLearnedWords.random()
+        val correctWord = finalVariants.random()
 
         currentQuestion = Question(
             correctWord = correctWord,
-            variants = finalVariants.shuffled() // Еще раз перемешиваем для надежности
+            variants = finalVariants.shuffled()
         )
         return currentQuestion
     }
