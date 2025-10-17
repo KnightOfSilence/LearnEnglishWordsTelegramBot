@@ -9,7 +9,7 @@ fun main(args: Array<String>) {
 
     val botToken = args[0]
     var updateId = 0
-    val updateIdRegex = """"update_id":(\d+)""".toRegex()
+    val updateIdRegex = """"update_id":\s*(\d+)""".toRegex()
     val messageTextRegex = """"text":"([^"]*)"""".toRegex()
 
     while (true) {
