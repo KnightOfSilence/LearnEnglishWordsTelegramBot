@@ -9,17 +9,27 @@ fun main(args: Array<String>) {
 
     val botToken = args[0]
     var updateId = 0
+    val updateIdRegex = """"update_id":\s*(\d+)""".toRegex()
+    val messageTextRegex = """"text":"([^"]*)"""".toRegex()
 
     while (true) {
-        Thread.sleep(2000)
+        Thread.sleep(3000)
         val updates: String = getUpdates(botToken, updateId)
         println(updates)
-        val startUpdateId = updates.lastIndexOf("update_id")
-        val endUpdateId = updates.lastIndexOf(",\n\"message\"")
-        if (startUpdateId == -1 || endUpdateId == -1) continue
-        val updateIdString = updates.substring(startUpdateId + 11, endUpdateId)
-        println(updateIdString)
-        updateId = updateIdString.toInt() + 1
+
+        val lastMatchResult = updateIdRegex.findAll(updates).lastOrNull()
+
+        if (lastMatchResult != null) {
+            val updateIdString = lastMatchResult.groupValues[1]
+            updateId = updateIdString.toInt() + 1
+            println("Последний updateId: ${updateId - 1}")
+        }
+
+        val lastMessageMatch = messageTextRegex.findAll(updates).lastOrNull()
+        if (lastMessageMatch != null) {
+            val messageText = lastMessageMatch.groupValues[1]
+            println("Последнее сообщение: $messageText")
+        }
     }
 }
 
