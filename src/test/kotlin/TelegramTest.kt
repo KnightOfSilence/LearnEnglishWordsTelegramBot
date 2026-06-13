@@ -108,10 +108,18 @@ class TelegramTest {
                 message = TelegramMessage(TelegramChat(888), "Выберите действие:"),
             ),
         )
+        val trainer = createTrainer(
+            """
+            cat|кошка|3
+            dog|собака|0
+            house|дом|3
+            """.trimIndent(),
+        )
 
         handleUpdate(
             botToken = "token",
             update = update,
+            trainer = trainer,
             messageSender = { _, chatId, text, keyboard ->
                 sentMessages += Triple(chatId, text, keyboard)
                 "{}"
@@ -125,7 +133,7 @@ class TelegramTest {
         assertEquals(listOf("callback-31"), answeredCallbacks)
         assertEquals(1, sentMessages.size)
         assertEquals(888L, sentMessages.single().first)
-        assertEquals("Показываю статистику.", sentMessages.single().second)
+        assertEquals("Выучено 2 из 3 слов | 66%", sentMessages.single().second)
         assertEquals(mainMenuKeyboard, sentMessages.single().third)
     }
 
@@ -136,10 +144,12 @@ class TelegramTest {
             updateId = 32,
             message = TelegramMessage(TelegramChat(-999), "/start"),
         )
+        val trainer = createTrainer("cat|кошка|0")
 
         handleUpdate(
             botToken = "token",
             update = update,
+            trainer = trainer,
             messageSender = { _, chatId, text, keyboard ->
                 sentMessages += Triple(chatId, text, keyboard)
                 "{}"
@@ -150,6 +160,14 @@ class TelegramTest {
         assertEquals(-999L, sentMessages.single().first)
         assertEquals("Выберите действие:", sentMessages.single().second)
         assertEquals(mainMenuKeyboard, sentMessages.single().third)
+    }
+
+    @Test
+    fun `empty dictionary statistics are formatted for telegram`() {
+        assertEquals(
+            "Словарь пуст.",
+            formatStatistics(Statistics(learnedWords = 0, totalWords = 0, learnedPercent = 0)),
+        )
     }
 
     @Test
@@ -237,6 +255,13 @@ class TelegramTest {
             val (name, value) = parameter.split("=", limit = 2)
             name to URLDecoder.decode(value, StandardCharsets.UTF_8)
         }
+
+    private fun createTrainer(content: String): LearnWordsTrainer {
+        val file = kotlin.io.path.createTempFile(prefix = "telegram-dictionary-", suffix = ".txt")
+            .toFile()
+            .apply { writeText(content) }
+        return LearnWordsTrainer(file)
+    }
 
     private fun readBody(request: HttpRequest): String {
         val bodyPublisher = request.bodyPublisher().orElseThrow()
