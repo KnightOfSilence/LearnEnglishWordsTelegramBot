@@ -1,4 +1,5 @@
 import java.io.File
+import kotlin.random.Random
 
 data class Word(
     val original: String,
@@ -21,12 +22,19 @@ class LearnWordsTrainer(
     private val wordsFile: File = File("words.txt"),
     private val learnedWordsThreshold: Int = 3,
     private val numberOfOptions: Int = 4,
+    private val random: Random = Random.Default,
 ) {
     var currentQuestion: Question? = null
-    val dictionary = loadDictionary()
+        private set
+    val dictionary: List<Word> = loadDictionary()
+
+    init {
+        require(learnedWordsThreshold > 0) { "Порог изучения должен быть больше нуля." }
+        require(numberOfOptions > 0) { "Количество вариантов должно быть больше нуля." }
+    }
 
     fun getStatistics(): Statistics {
-        val learned = dictionary.filter { it.correctAnswersCount >= learnedWordsThreshold }.size
+        val learned = dictionary.count { it.correctAnswersCount >= learnedWordsThreshold }
         val total = dictionary.size
         val percent = if (total > 0) (learned * 100 / total) else 0
         return Statistics(learned, total, percent)
@@ -34,54 +42,60 @@ class LearnWordsTrainer(
 
     fun getNextQuestion(): Question? {
         val notLearnedWords = dictionary.filter { it.correctAnswersCount < learnedWordsThreshold }
-        val learnedWords = dictionary.filter { it.correctAnswersCount >= learnedWordsThreshold }
 
         if (notLearnedWords.isEmpty()) {
+            currentQuestion = null
             return null
         }
-        val questionWords = mutableListOf<Word>()
-        questionWords.addAll(notLearnedWords)
-        val remainingOptions = numberOfOptions - questionWords.size
-        if (remainingOptions > 0) {
-            questionWords.addAll(learnedWords.shuffled().take(remainingOptions))
-        }
-        val finalVariants = questionWords.shuffled().take(numberOfOptions)
-        val correctWord = finalVariants.random()
+
+        val correctWord = notLearnedWords.random(random)
+        val incorrectOptions = dictionary
+            .filter { it != correctWord }
+            .shuffled(random)
+            .take(numberOfOptions - 1)
+        val variants = (incorrectOptions + correctWord).shuffled(random)
 
         currentQuestion = Question(
             correctWord = correctWord,
-            variants = finalVariants.shuffled()
+            variants = variants,
         )
         return currentQuestion
     }
 
     fun checkAnswer(userAnswer: Int): Boolean {
-
-        val currentQuestion = this.currentQuestion ?: return false
-        val correctAnswerIndex = currentQuestion.variants.indexOf(currentQuestion.correctWord)
-        if (userAnswer - 1 == correctAnswerIndex) {
-            currentQuestion.correctWord.correctAnswersCount++
-            saveDictionary()
-            return true
+        val question = currentQuestion ?: return false
+        if (userAnswer !in 1..question.variants.size) {
+            return false
         }
-        return false
+
+        val isCorrect = question.variants[userAnswer - 1] == question.correctWord
+        if (isCorrect) {
+            question.correctWord.correctAnswersCount++
+            saveDictionary()
+        }
+        currentQuestion = null
+        return isCorrect
     }
 
     private fun loadDictionary(): List<Word> {
         if (!wordsFile.exists()) {
             println("Файл со словарем не найден. Создан новый.")
+            wordsFile.parentFile?.mkdirs()
             wordsFile.createNewFile()
-            return mutableListOf()
+            return emptyList()
         }
-        val dictionary = mutableListOf<Word>()
-        wordsFile.readLines().forEach {
-            val parts = it.split("|")
-            if (parts.size >= 2) {
-                val correctAnswers = parts.getOrNull(2)?.toIntOrNull() ?: 0
-                dictionary.add(Word(parts[0], parts[1], correctAnswers))
+
+        return wordsFile.readLines().mapNotNull { line ->
+            val parts = line.split("|").map(String::trim)
+            val original = parts.getOrNull(0).orEmpty()
+            val translated = parts.getOrNull(1).orEmpty()
+            if (original.isBlank() || translated.isBlank()) {
+                return@mapNotNull null
             }
+
+            val correctAnswers = parts.getOrNull(2)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+            Word(original, translated, correctAnswers)
         }
-        return dictionary
     }
 
     private fun saveDictionary() {
