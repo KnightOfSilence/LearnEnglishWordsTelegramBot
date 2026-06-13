@@ -14,6 +14,7 @@ const val TELEGRAM_MESSAGE_MAX_LENGTH = 4096
 const val TELEGRAM_CALLBACK_DATA_MAX_BYTES = 64
 const val CALLBACK_LEARN_WORDS = "learn_words"
 const val CALLBACK_STATISTICS = "statistics"
+const val CALLBACK_DATA_ANSWER_PREFIX = "answer_"
 
 private val telegramHttpClient: HttpClient = HttpClient.newHttpClient()
 private val telegramJson = Json { ignoreUnknownKeys = true }
@@ -119,6 +120,7 @@ fun handleUpdate(
     update: TelegramUpdate,
     trainer: LearnWordsTrainer,
     messageSender: (String, Long, String, InlineKeyboardMarkup?) -> String = ::sendMessage,
+    questionSender: (String, Long, Question) -> String = ::sendQuestion,
     callbackAnswerer: (String, String) -> String = ::answerCallbackQuery,
 ) {
     if (update.message?.text != null) {
@@ -128,14 +130,43 @@ fun handleUpdate(
     update.callbackQuery?.let { callback ->
         callbackAnswerer(botToken, callback.id)
         val chatId = callback.message?.chat?.id ?: return@let
-        val responseText = when (callback.data) {
-            CALLBACK_LEARN_WORDS -> "Начинаем учить слова."
-            CALLBACK_STATISTICS -> formatStatistics(trainer.getStatistics())
-            else -> "Неизвестная команда."
+        when (callback.data) {
+            CALLBACK_LEARN_WORDS -> {
+                val question = trainer.getNextQuestion()
+                if (question == null) {
+                    messageSender(botToken, chatId, "Вы выучили все слова в базе", mainMenuKeyboard)
+                } else {
+                    questionSender(botToken, chatId, question)
+                }
+            }
+            CALLBACK_STATISTICS -> {
+                val responseText = formatStatistics(trainer.getStatistics())
+                messageSender(botToken, chatId, responseText, mainMenuKeyboard)
+            }
+            else -> messageSender(botToken, chatId, "Неизвестная команда.", mainMenuKeyboard)
         }
-        messageSender(botToken, chatId, responseText, mainMenuKeyboard)
     }
 }
+
+fun sendQuestion(botToken: String, chatId: Long, question: Question): String =
+    sendMessage(
+        botToken = botToken,
+        chatId = chatId,
+        text = question.correctWord.original,
+        replyMarkup = createQuestionKeyboard(question),
+    )
+
+fun createQuestionKeyboard(question: Question): InlineKeyboardMarkup =
+    InlineKeyboardMarkup(
+        inlineKeyboard = question.variants.mapIndexed { index, word ->
+            listOf(
+                InlineKeyboardButton(
+                    text = word.translated,
+                    callbackData = "$CALLBACK_DATA_ANSWER_PREFIX$index",
+                ),
+            )
+        },
+    )
 
 fun formatStatistics(statistics: Statistics): String =
     if (statistics.totalWords == 0) {
