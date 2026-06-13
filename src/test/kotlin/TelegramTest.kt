@@ -163,6 +163,117 @@ class TelegramTest {
     }
 
     @Test
+    fun `learn words callback sends next question to source chat`() {
+        val trainer = createTrainer(
+            """
+            cat|кошка|0
+            dog|собака|0
+            house|дом|0
+            """.trimIndent(),
+        )
+        val sentQuestions = mutableListOf<Pair<Long, Question>>()
+        val update = TelegramUpdate(
+            updateId = 33,
+            callbackQuery = TelegramCallbackQuery(
+                id = "callback-33",
+                data = CALLBACK_LEARN_WORDS,
+                message = TelegramMessage(TelegramChat(999), "Выберите действие:"),
+            ),
+        )
+
+        handleUpdate(
+            botToken = "token",
+            update = update,
+            trainer = trainer,
+            questionSender = { _, chatId, question ->
+                sentQuestions += chatId to question
+                "{}"
+            },
+            callbackAnswerer = { _, _ -> "true" },
+        )
+
+        assertEquals(1, sentQuestions.size)
+        assertEquals(999L, sentQuestions.single().first)
+        assertEquals(trainer.currentQuestion, sentQuestions.single().second)
+    }
+
+    @Test
+    fun `learn words callback reports when all words are learned`() {
+        val trainer = createTrainer("cat|кошка|3")
+        val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+        val update = TelegramUpdate(
+            updateId = 34,
+            callbackQuery = TelegramCallbackQuery(
+                id = "callback-34",
+                data = CALLBACK_LEARN_WORDS,
+                message = TelegramMessage(TelegramChat(1000), "Выберите действие:"),
+            ),
+        )
+
+        handleUpdate(
+            botToken = "token",
+            update = update,
+            trainer = trainer,
+            messageSender = { _, chatId, text, keyboard ->
+                sentMessages += Triple(chatId, text, keyboard)
+                "{}"
+            },
+            callbackAnswerer = { _, _ -> "true" },
+        )
+
+        assertEquals(1, sentMessages.size)
+        assertEquals(1000L, sentMessages.single().first)
+        assertEquals("Вы выучили все слова в базе", sentMessages.single().second)
+        assertEquals(mainMenuKeyboard, sentMessages.single().third)
+    }
+
+    @Test
+    fun `question keyboard contains translated answers and indexed callback data`() {
+        val correctWord = Word("cat", "кошка")
+        val question = Question(
+            correctWord = correctWord,
+            variants = listOf(
+                Word("dog", "собака"),
+                correctWord,
+                Word("house", "дом"),
+            ),
+        )
+
+        val keyboard = createQuestionKeyboard(question)
+
+        assertEquals(
+            listOf(
+                InlineKeyboardButton("собака", "answer_0"),
+                InlineKeyboardButton("кошка", "answer_1"),
+                InlineKeyboardButton("дом", "answer_2"),
+            ),
+            keyboard.inlineKeyboard.flatten(),
+        )
+    }
+
+    @Test
+    fun `send question request uses english word and answer keyboard`() {
+        val correctWord = Word("cat", "кошка")
+        val question = Question(
+            correctWord = correctWord,
+            variants = listOf(correctWord, Word("dog", "собака")),
+        )
+        val request = createSendMessageRequest(
+            botToken = "token",
+            chatId = 123,
+            text = question.correctWord.original,
+            replyMarkup = createQuestionKeyboard(question),
+        )
+        val parameters = parseFormBody(readBody(request))
+
+        assertEquals("cat", parameters["text"])
+        assertEquals(
+            """{"inline_keyboard":[[{"text":"кошка","callback_data":"answer_0"}],[{"text":"собака","callback_data":"answer_1"}]]}""",
+            parameters["reply_markup"],
+        )
+    }
+
+    @Test
     fun `empty dictionary statistics are formatted for telegram`() {
         assertEquals(
             "Словарь пуст.",
