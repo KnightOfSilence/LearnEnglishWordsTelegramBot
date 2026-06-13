@@ -1,6 +1,7 @@
 .gradle
 .gradle-local/
 build/
+user-progress/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/

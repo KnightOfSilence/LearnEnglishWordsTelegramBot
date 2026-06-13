@@ -77,6 +77,12 @@ class LearnWordsTrainer(
         return isCorrect
     }
 
+    fun resetProgress() {
+        dictionary.forEach { it.correctAnswersCount = 0 }
+        currentQuestion = null
+        saveDictionary()
+    }
+
     private fun loadDictionary(): List<Word> {
         if (!wordsFile.exists()) {
             println("Файл со словарем не найден. Создан новый.")
