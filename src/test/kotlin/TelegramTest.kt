@@ -1,11 +1,14 @@
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.ByteBuffer
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.Flow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class TelegramTest {
     @Test
@@ -65,6 +68,91 @@ class TelegramTest {
     }
 
     @Test
+    fun `callback query is parsed with source chat and callback data`() {
+        val response = parseUpdates(
+            """
+            {
+              "ok": true,
+              "result": [
+                {
+                  "update_id": 30,
+                  "callback_query": {
+                    "id": "callback-123",
+                    "data": "learn_words",
+                    "message": {
+                      "chat": {"id": 777},
+                      "text": "Выберите действие:"
+                    }
+                  }
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+
+        val callback = response.result.single().callbackQuery
+        assertEquals("callback-123", callback?.id)
+        assertEquals(CALLBACK_LEARN_WORDS, callback?.data)
+        assertEquals(777L, callback?.message?.chat?.id)
+    }
+
+    @Test
+    fun `callback is acknowledged and response is sent to source chat`() {
+        val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+        val answeredCallbacks = mutableListOf<String>()
+        val update = TelegramUpdate(
+            updateId = 31,
+            callbackQuery = TelegramCallbackQuery(
+                id = "callback-31",
+                data = CALLBACK_STATISTICS,
+                message = TelegramMessage(TelegramChat(888), "Выберите действие:"),
+            ),
+        )
+
+        handleUpdate(
+            botToken = "token",
+            update = update,
+            messageSender = { _, chatId, text, keyboard ->
+                sentMessages += Triple(chatId, text, keyboard)
+                "{}"
+            },
+            callbackAnswerer = { _, callbackId ->
+                answeredCallbacks += callbackId
+                "true"
+            },
+        )
+
+        assertEquals(listOf("callback-31"), answeredCallbacks)
+        assertEquals(1, sentMessages.size)
+        assertEquals(888L, sentMessages.single().first)
+        assertEquals("Показываю статистику.", sentMessages.single().second)
+        assertEquals(mainMenuKeyboard, sentMessages.single().third)
+    }
+
+    @Test
+    fun `text message receives menu keyboard in its own chat`() {
+        val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+        val update = TelegramUpdate(
+            updateId = 32,
+            message = TelegramMessage(TelegramChat(-999), "/start"),
+        )
+
+        handleUpdate(
+            botToken = "token",
+            update = update,
+            messageSender = { _, chatId, text, keyboard ->
+                sentMessages += Triple(chatId, text, keyboard)
+                "{}"
+            },
+        )
+
+        assertEquals(1, sentMessages.size)
+        assertEquals(-999L, sentMessages.single().first)
+        assertEquals("Выберите действие:", sentMessages.single().second)
+        assertEquals(mainMenuKeyboard, sentMessages.single().third)
+    }
+
+    @Test
     fun `send message request uses post and encodes text`() {
         val request = createSendMessageRequest("token", -123, "Привет & hello")
 
@@ -95,6 +183,60 @@ class TelegramTest {
 
         createSendMessageRequest("token", 1, text)
     }
+
+    @Test
+    fun `send message request serializes inline keyboard as reply markup`() {
+        val request = createSendMessageRequest("token", 123, "Меню", mainMenuKeyboard)
+        val parameters = parseFormBody(readBody(request))
+
+        assertEquals("123", parameters["chat_id"])
+        assertEquals("Меню", parameters["text"])
+        assertEquals(
+            """{"inline_keyboard":[[{"text":"Учить слова","callback_data":"learn_words"}],[{"text":"Статистика","callback_data":"statistics"}]]}""",
+            parameters["reply_markup"],
+        )
+    }
+
+    @Test
+    fun `callback data must fit telegram byte limit`() {
+        InlineKeyboardButton("Кнопка", "a".repeat(TELEGRAM_CALLBACK_DATA_MAX_BYTES))
+
+        assertFailsWith<IllegalArgumentException> {
+            InlineKeyboardButton("Кнопка", "я".repeat(TELEGRAM_CALLBACK_DATA_MAX_BYTES))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            InlineKeyboardButton("Кнопка", "")
+        }
+    }
+
+    @Test
+    fun `answer callback query request uses callback id`() {
+        val request = createAnswerCallbackQueryRequest("token", "callback & 1")
+
+        assertEquals("POST", request.method())
+        assertEquals(
+            "https://api.telegram.org/bottoken/answerCallbackQuery",
+            request.uri().toString(),
+        )
+        assertEquals("callback_query_id=callback+%26+1", readBody(request))
+    }
+
+    @Test
+    fun `inline keyboard requires at least one button`() {
+        assertFailsWith<IllegalArgumentException> {
+            InlineKeyboardMarkup(emptyList())
+        }
+        assertFailsWith<IllegalArgumentException> {
+            InlineKeyboardMarkup(listOf(emptyList()))
+        }
+        assertTrue(mainMenuKeyboard.inlineKeyboard.flatten().isNotEmpty())
+    }
+
+    private fun parseFormBody(body: String): Map<String, String> =
+        body.split("&").associate { parameter ->
+            val (name, value) = parameter.split("=", limit = 2)
+            name to URLDecoder.decode(value, StandardCharsets.UTF_8)
+        }
 
     private fun readBody(request: HttpRequest): String {
         val bodyPublisher = request.bodyPublisher().orElseThrow()
