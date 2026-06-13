@@ -2,6 +2,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.File
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -14,6 +15,7 @@ const val TELEGRAM_MESSAGE_MAX_LENGTH = 4096
 const val TELEGRAM_CALLBACK_DATA_MAX_BYTES = 64
 const val CALLBACK_LEARN_WORDS = "learn_words"
 const val CALLBACK_STATISTICS = "statistics"
+const val CALLBACK_RESET_PROGRESS = "reset_progress"
 const val CALLBACK_DATA_ANSWER_PREFIX = "answer_"
 
 private val telegramHttpClient: HttpClient = HttpClient.newHttpClient()
@@ -82,26 +84,73 @@ val mainMenuKeyboard = InlineKeyboardMarkup(
     inlineKeyboard = listOf(
         listOf(InlineKeyboardButton("Учить слова", CALLBACK_LEARN_WORDS)),
         listOf(InlineKeyboardButton("Статистика", CALLBACK_STATISTICS)),
+        listOf(InlineKeyboardButton("Сбросить прогресс", CALLBACK_RESET_PROGRESS)),
     ),
 )
 
 fun main(args: Array<String>) {
-    require(args.isNotEmpty() && args[0].isNotBlank()) {
-        "Передайте токен Telegram-бота первым аргументом."
-    }
-
-    val botToken = args[0]
-    val trainer = LearnWordsTrainer()
+    val botToken = resolveBotToken(args)
+    val trainers = mutableMapOf<Long, LearnWordsTrainer>()
     var updateId = 0L
     while (true) {
         Thread.sleep(3000)
         val updates = parseUpdates(getUpdates(botToken, updateId))
 
-        updates.result.forEach { update ->
-            handleUpdate(botToken, update, trainer)
+        updates.result.sortedBy { it.updateId }.forEach { update ->
+            handleUpdate(
+                botToken = botToken,
+                update = update,
+                trainerProvider = { chatId ->
+                    trainers.getOrPut(chatId) { createTrainerForChat(chatId) }
+                },
+            )
         }
 
         updateId = updates.result.maxOfOrNull { it.updateId + 1 } ?: updateId
+    }
+}
+
+fun createTrainerForChat(
+    chatId: Long,
+    sourceDictionary: File = File("words.txt"),
+    progressDirectory: File = File("user-progress"),
+): LearnWordsTrainer {
+    val progressFile = File(progressDirectory, "$chatId.txt")
+    if (!progressFile.exists()) {
+        progressFile.parentFile?.mkdirs()
+        val initialDictionary = if (sourceDictionary.exists()) {
+            sourceDictionary.readLines().mapNotNull { line ->
+                val parts = line.split("|").map(String::trim)
+                val original = parts.getOrNull(0).orEmpty()
+                val translated = parts.getOrNull(1).orEmpty()
+                if (original.isBlank() || translated.isBlank()) {
+                    null
+                } else {
+                    "$original|$translated|0"
+                }
+            }
+        } else {
+            emptyList()
+        }
+        progressFile.writeText(
+            initialDictionary.joinToString(
+                separator = "\n",
+                postfix = if (initialDictionary.isEmpty()) "" else "\n",
+            ),
+        )
+    }
+    return LearnWordsTrainer(progressFile)
+}
+
+fun resolveBotToken(
+    args: Array<String>,
+    environment: Map<String, String> = System.getenv(),
+): String {
+    val botToken = args.firstOrNull()?.takeIf { it.isNotBlank() }
+        ?: environment["TELEGRAM_BOT_TOKEN"]?.takeIf { it.isNotBlank() }
+
+    return requireNotNull(botToken) {
+        "Передайте токен первым аргументом или задайте переменную TELEGRAM_BOT_TOKEN."
     }
 }
 
@@ -118,33 +167,92 @@ fun getUpdates(botToken: String, updateId: Long): String {
 fun handleUpdate(
     botToken: String,
     update: TelegramUpdate,
-    trainer: LearnWordsTrainer,
+    trainerProvider: (Long) -> LearnWordsTrainer,
     messageSender: (String, Long, String, InlineKeyboardMarkup?) -> String = ::sendMessage,
     questionSender: (String, Long, Question) -> String = ::sendQuestion,
     callbackAnswerer: (String, String) -> String = ::answerCallbackQuery,
 ) {
+    val chatId = update.message?.chat?.id ?: update.callbackQuery?.message?.chat?.id ?: return
+    val trainer = trainerProvider(chatId)
+
     if (update.message?.text != null) {
-        messageSender(botToken, update.message.chat.id, "Выберите действие:", mainMenuKeyboard)
+        messageSender(botToken, chatId, "Выберите действие:", mainMenuKeyboard)
     }
 
     update.callbackQuery?.let { callback ->
         callbackAnswerer(botToken, callback.id)
-        val chatId = callback.message?.chat?.id ?: return@let
-        when (callback.data) {
-            CALLBACK_LEARN_WORDS -> {
-                val question = trainer.getNextQuestion()
-                if (question == null) {
-                    messageSender(botToken, chatId, "Вы выучили все слова в базе", mainMenuKeyboard)
-                } else {
-                    questionSender(botToken, chatId, question)
-                }
-            }
-            CALLBACK_STATISTICS -> {
+        when {
+            callback.data == CALLBACK_LEARN_WORDS ->
+                sendNextQuestion(botToken, chatId, trainer, messageSender, questionSender)
+
+            callback.data == CALLBACK_STATISTICS -> {
                 val responseText = formatStatistics(trainer.getStatistics())
                 messageSender(botToken, chatId, responseText, mainMenuKeyboard)
             }
-            else -> messageSender(botToken, chatId, "Неизвестная команда.", mainMenuKeyboard)
+
+            callback.data == CALLBACK_RESET_PROGRESS -> {
+                trainer.resetProgress()
+                messageSender(botToken, chatId, "Прогресс сброшен.", mainMenuKeyboard)
+            }
+
+            callback.data?.startsWith(CALLBACK_DATA_ANSWER_PREFIX) == true ->
+                handleAnswer(
+                    botToken = botToken,
+                    chatId = chatId,
+                    callbackData = callback.data,
+                    trainer = trainer,
+                    messageSender = messageSender,
+                    questionSender = questionSender,
+                )
+
+            else ->
+                messageSender(botToken, chatId, "Неизвестная команда.", mainMenuKeyboard)
         }
+    }
+}
+
+private fun handleAnswer(
+    botToken: String,
+    chatId: Long,
+    callbackData: String,
+    trainer: LearnWordsTrainer,
+    messageSender: (String, Long, String, InlineKeyboardMarkup?) -> String,
+    questionSender: (String, Long, Question) -> String,
+) {
+    val answerIndex = callbackData.substringAfter(CALLBACK_DATA_ANSWER_PREFIX).toIntOrNull()
+    val question = trainer.currentQuestion
+    if (answerIndex == null || question == null) {
+        messageSender(
+            botToken,
+            chatId,
+            "Сначала выберите «Учить слова».",
+            mainMenuKeyboard,
+        )
+        return
+    }
+
+    val isCorrect = trainer.checkAnswer(answerIndex + 1)
+    val resultText = if (isCorrect) {
+        "Правильно!"
+    } else {
+        "Неправильно! ${question.correctWord.original} - ${question.correctWord.translated}"
+    }
+    messageSender(botToken, chatId, resultText, null)
+    sendNextQuestion(botToken, chatId, trainer, messageSender, questionSender)
+}
+
+private fun sendNextQuestion(
+    botToken: String,
+    chatId: Long,
+    trainer: LearnWordsTrainer,
+    messageSender: (String, Long, String, InlineKeyboardMarkup?) -> String,
+    questionSender: (String, Long, Question) -> String,
+) {
+    val question = trainer.getNextQuestion()
+    if (question == null) {
+        messageSender(botToken, chatId, "Вы выучили все слова в базе", mainMenuKeyboard)
+    } else {
+        questionSender(botToken, chatId, question)
     }
 }
 

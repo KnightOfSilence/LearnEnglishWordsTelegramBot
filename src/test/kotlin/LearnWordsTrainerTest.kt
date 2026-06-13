@@ -97,6 +97,30 @@ class LearnWordsTrainerTest {
         assertNull(trainer.currentQuestion)
     }
 
+    @Test
+    fun `reset progress clears answers and current question`() {
+        val file = createDictionaryFile(
+            """
+            cat|кошка|3
+            dog|собака|2
+            """.trimIndent(),
+        )
+        val trainer = LearnWordsTrainer(file, random = Random(1))
+        trainer.getNextQuestion()
+
+        trainer.resetProgress()
+
+        assertEquals(listOf(0, 0), trainer.dictionary.map { it.correctAnswersCount })
+        assertNull(trainer.currentQuestion)
+        assertEquals(
+            """
+            cat|кошка|0
+            dog|собака|0
+            """.trimIndent(),
+            file.readText().trim(),
+        )
+    }
+
     private fun createTrainer(content: String): LearnWordsTrainer =
         LearnWordsTrainer(createDictionaryFile(content), random = Random(1))
 

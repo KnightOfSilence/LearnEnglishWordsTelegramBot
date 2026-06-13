@@ -1,16 +1,34 @@
+import java.io.File
+import java.net.URLDecoder
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.ByteBuffer
-import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.Flow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TelegramTest {
+    @Test
+    fun `bot token can be read from argument or environment`() {
+        assertEquals("argument-token", resolveBotToken(arrayOf("argument-token"), emptyMap()))
+        assertEquals(
+            "environment-token",
+            resolveBotToken(emptyArray(), mapOf("TELEGRAM_BOT_TOKEN" to "environment-token")),
+        )
+    }
+
+    @Test
+    fun `bot token is required`() {
+        assertFailsWith<IllegalArgumentException> {
+            resolveBotToken(emptyArray(), emptyMap())
+        }
+    }
+
     @Test
     fun `updates preserve chat id for every message`() {
         val response = parseUpdates(
@@ -119,7 +137,7 @@ class TelegramTest {
         handleUpdate(
             botToken = "token",
             update = update,
-            trainer = trainer,
+            trainerProvider = { trainer },
             messageSender = { _, chatId, text, keyboard ->
                 sentMessages += Triple(chatId, text, keyboard)
                 "{}"
@@ -149,7 +167,7 @@ class TelegramTest {
         handleUpdate(
             botToken = "token",
             update = update,
-            trainer = trainer,
+            trainerProvider = { trainer },
             messageSender = { _, chatId, text, keyboard ->
                 sentMessages += Triple(chatId, text, keyboard)
                 "{}"
@@ -184,7 +202,7 @@ class TelegramTest {
         handleUpdate(
             botToken = "token",
             update = update,
-            trainer = trainer,
+            trainerProvider = { trainer },
             questionSender = { _, chatId, question ->
                 sentQuestions += chatId to question
                 "{}"
@@ -213,7 +231,7 @@ class TelegramTest {
         handleUpdate(
             botToken = "token",
             update = update,
-            trainer = trainer,
+            trainerProvider = { trainer },
             messageSender = { _, chatId, text, keyboard ->
                 sentMessages += Triple(chatId, text, keyboard)
                 "{}"
@@ -225,6 +243,172 @@ class TelegramTest {
         assertEquals(1000L, sentMessages.single().first)
         assertEquals("Вы выучили все слова в базе", sentMessages.single().second)
         assertEquals(mainMenuKeyboard, sentMessages.single().third)
+    }
+
+    @Test
+    fun `answer callback checks answer and sends next question`() {
+        val trainer = createTrainer(
+            """
+            cat|кошка|0
+            dog|собака|0
+            """.trimIndent(),
+        )
+        val question = assertNotNull(trainer.getNextQuestion())
+        val correctIndex = question.variants.indexOf(question.correctWord)
+        val sentMessages = mutableListOf<String>()
+        val sentQuestions = mutableListOf<Question>()
+        val update = TelegramUpdate(
+            updateId = 35,
+            callbackQuery = TelegramCallbackQuery(
+                id = "callback-35",
+                data = "$CALLBACK_DATA_ANSWER_PREFIX$correctIndex",
+                message = TelegramMessage(TelegramChat(1001), question.correctWord.original),
+            ),
+        )
+
+        handleUpdate(
+            botToken = "token",
+            update = update,
+            trainerProvider = { trainer },
+            messageSender = { _, _, text, _ ->
+                sentMessages += text
+                "{}"
+            },
+            questionSender = { _, _, nextQuestion ->
+                sentQuestions += nextQuestion
+                "{}"
+            },
+            callbackAnswerer = { _, _ -> "true" },
+        )
+
+        assertEquals(listOf("Правильно!"), sentMessages)
+        assertEquals(1, question.correctWord.correctAnswersCount)
+        assertEquals(1, sentQuestions.size)
+        assertEquals(trainer.currentQuestion, sentQuestions.single())
+    }
+
+    @Test
+    fun `incorrect answer shows correct translation and continues learning`() {
+        val trainer = createTrainer(
+            """
+            cat|кошка|0
+            dog|собака|0
+            """.trimIndent(),
+        )
+        val question = assertNotNull(trainer.getNextQuestion())
+        val incorrectIndex = question.variants.indexOfFirst { it != question.correctWord }
+        val sentMessages = mutableListOf<String>()
+        val sentQuestions = mutableListOf<Question>()
+
+        handleUpdate(
+            botToken = "token",
+            update = TelegramUpdate(
+                updateId = 36,
+                callbackQuery = TelegramCallbackQuery(
+                    id = "callback-36",
+                    data = "$CALLBACK_DATA_ANSWER_PREFIX$incorrectIndex",
+                    message = TelegramMessage(TelegramChat(1002), question.correctWord.original),
+                ),
+            ),
+            trainerProvider = { trainer },
+            messageSender = { _, _, text, _ ->
+                sentMessages += text
+                "{}"
+            },
+            questionSender = { _, _, nextQuestion ->
+                sentQuestions += nextQuestion
+                "{}"
+            },
+            callbackAnswerer = { _, _ -> "true" },
+        )
+
+        assertEquals(
+            listOf("Неправильно! ${question.correctWord.original} - ${question.correctWord.translated}"),
+            sentMessages,
+        )
+        assertEquals(0, question.correctWord.correctAnswersCount)
+        assertEquals(1, sentQuestions.size)
+    }
+
+    @Test
+    fun `answer without active question returns to menu`() {
+        val trainer = createTrainer("cat|кошка|0")
+        val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+
+        handleUpdate(
+            botToken = "token",
+            update = TelegramUpdate(
+                updateId = 37,
+                callbackQuery = TelegramCallbackQuery(
+                    id = "callback-37",
+                    data = "${CALLBACK_DATA_ANSWER_PREFIX}0",
+                    message = TelegramMessage(TelegramChat(1003), "old question"),
+                ),
+            ),
+            trainerProvider = { trainer },
+            messageSender = { _, chatId, text, keyboard ->
+                sentMessages += Triple(chatId, text, keyboard)
+                "{}"
+            },
+            callbackAnswerer = { _, _ -> "true" },
+        )
+
+        assertEquals(1, sentMessages.size)
+        assertEquals(1003L, sentMessages.single().first)
+        assertEquals("Сначала выберите «Учить слова».", sentMessages.single().second)
+        assertEquals(mainMenuKeyboard, sentMessages.single().third)
+    }
+
+    @Test
+    fun `reset progress callback clears only current chat trainer`() {
+        val trainer = createTrainer("cat|кошка|3")
+        val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+
+        handleUpdate(
+            botToken = "token",
+            update = TelegramUpdate(
+                updateId = 38,
+                callbackQuery = TelegramCallbackQuery(
+                    id = "callback-38",
+                    data = CALLBACK_RESET_PROGRESS,
+                    message = TelegramMessage(TelegramChat(1004), "Выберите действие:"),
+                ),
+            ),
+            trainerProvider = { trainer },
+            messageSender = { _, chatId, text, keyboard ->
+                sentMessages += Triple(chatId, text, keyboard)
+                "{}"
+            },
+            callbackAnswerer = { _, _ -> "true" },
+        )
+
+        assertEquals(0, trainer.dictionary.single().correctAnswersCount)
+        assertEquals(1, sentMessages.size)
+        assertEquals(1004L, sentMessages.single().first)
+        assertEquals("Прогресс сброшен.", sentMessages.single().second)
+        assertEquals(mainMenuKeyboard, sentMessages.single().third)
+    }
+
+    @Test
+    fun `chat trainers have independent persistent progress`() {
+        val root = kotlin.io.path.createTempDirectory("telegram-progress-").toFile()
+        val source = File(root, "words.txt").apply { writeText("cat|кошка|2\n") }
+        val progressDirectory = File(root, "users")
+        val firstTrainer = createTrainerForChat(111, source, progressDirectory)
+        val secondTrainer = createTrainerForChat(222, source, progressDirectory)
+
+        repeat(3) {
+            val question = assertNotNull(firstTrainer.getNextQuestion())
+            assertTrue(firstTrainer.checkAnswer(question.variants.indexOf(question.correctWord) + 1))
+        }
+
+        assertEquals(Statistics(1, 1, 100), firstTrainer.getStatistics())
+        assertEquals(Statistics(0, 1, 0), secondTrainer.getStatistics())
+        assertEquals(
+            Statistics(1, 1, 100),
+            createTrainerForChat(111, source, progressDirectory).getStatistics(),
+        )
+        assertEquals("cat|кошка|2", source.readText().trim())
     }
 
     @Test
@@ -321,7 +505,7 @@ class TelegramTest {
         assertEquals("123", parameters["chat_id"])
         assertEquals("Меню", parameters["text"])
         assertEquals(
-            """{"inline_keyboard":[[{"text":"Учить слова","callback_data":"learn_words"}],[{"text":"Статистика","callback_data":"statistics"}]]}""",
+            """{"inline_keyboard":[[{"text":"Учить слова","callback_data":"learn_words"}],[{"text":"Статистика","callback_data":"statistics"}],[{"text":"Сбросить прогресс","callback_data":"reset_progress"}]]}""",
             parameters["reply_markup"],
         )
     }
