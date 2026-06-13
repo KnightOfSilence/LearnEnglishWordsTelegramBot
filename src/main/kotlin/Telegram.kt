@@ -90,13 +90,14 @@ fun main(args: Array<String>) {
     }
 
     val botToken = args[0]
+    val trainer = LearnWordsTrainer()
     var updateId = 0L
     while (true) {
         Thread.sleep(3000)
         val updates = parseUpdates(getUpdates(botToken, updateId))
 
         updates.result.forEach { update ->
-            handleUpdate(botToken, update)
+            handleUpdate(botToken, update, trainer)
         }
 
         updateId = updates.result.maxOfOrNull { it.updateId + 1 } ?: updateId
@@ -116,6 +117,7 @@ fun getUpdates(botToken: String, updateId: Long): String {
 fun handleUpdate(
     botToken: String,
     update: TelegramUpdate,
+    trainer: LearnWordsTrainer,
     messageSender: (String, Long, String, InlineKeyboardMarkup?) -> String = ::sendMessage,
     callbackAnswerer: (String, String) -> String = ::answerCallbackQuery,
 ) {
@@ -128,12 +130,19 @@ fun handleUpdate(
         val chatId = callback.message?.chat?.id ?: return@let
         val responseText = when (callback.data) {
             CALLBACK_LEARN_WORDS -> "Начинаем учить слова."
-            CALLBACK_STATISTICS -> "Показываю статистику."
+            CALLBACK_STATISTICS -> formatStatistics(trainer.getStatistics())
             else -> "Неизвестная команда."
         }
         messageSender(botToken, chatId, responseText, mainMenuKeyboard)
     }
 }
+
+fun formatStatistics(statistics: Statistics): String =
+    if (statistics.totalWords == 0) {
+        "Словарь пуст."
+    } else {
+        "Выучено ${statistics.learnedWords} из ${statistics.totalWords} слов | ${statistics.learnedPercent}%"
+    }
 
 fun sendMessage(
     botToken: String,
