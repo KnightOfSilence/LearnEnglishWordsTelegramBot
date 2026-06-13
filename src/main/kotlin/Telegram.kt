@@ -86,11 +86,7 @@ val mainMenuKeyboard = InlineKeyboardMarkup(
 )
 
 fun main(args: Array<String>) {
-    require(args.isNotEmpty() && args[0].isNotBlank()) {
-        "Передайте токен Telegram-бота первым аргументом."
-    }
-
-    val botToken = args[0]
+    val botToken = resolveBotToken(args)
     val trainer = LearnWordsTrainer()
     var updateId = 0L
     while (true) {
@@ -102,6 +98,18 @@ fun main(args: Array<String>) {
         }
 
         updateId = updates.result.maxOfOrNull { it.updateId + 1 } ?: updateId
+    }
+}
+
+fun resolveBotToken(
+    args: Array<String>,
+    environment: Map<String, String> = System.getenv(),
+): String {
+    val botToken = args.firstOrNull()?.takeIf { it.isNotBlank() }
+        ?: environment["TELEGRAM_BOT_TOKEN"]?.takeIf { it.isNotBlank() }
+
+    return requireNotNull(botToken) {
+        "Передайте токен первым аргументом или задайте переменную TELEGRAM_BOT_TOKEN."
     }
 }
 

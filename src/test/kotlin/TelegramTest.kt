@@ -12,6 +12,22 @@ import kotlin.test.assertTrue
 
 class TelegramTest {
     @Test
+    fun `bot token can be read from argument or environment`() {
+        assertEquals("argument-token", resolveBotToken(arrayOf("argument-token"), emptyMap()))
+        assertEquals(
+            "environment-token",
+            resolveBotToken(emptyArray(), mapOf("TELEGRAM_BOT_TOKEN" to "environment-token")),
+        )
+    }
+
+    @Test
+    fun `bot token is required`() {
+        assertFailsWith<IllegalArgumentException> {
+            resolveBotToken(emptyArray(), emptyMap())
+        }
+    }
+
+    @Test
     fun `updates preserve chat id for every message`() {
         val response = parseUpdates(
             """
