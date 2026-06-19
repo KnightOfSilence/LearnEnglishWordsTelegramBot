@@ -111,6 +111,22 @@ class TelegramTest {
     }
 
     @Test
+    fun `bot menu commands request serializes telegram commands`() {
+        val request = createSetBotCommandsRequest("token")
+        val parameters = parseFormBody(readBody(request))
+
+        assertEquals("POST", request.method())
+        assertEquals(
+            "https://api.telegram.org/bottoken/setMyCommands",
+            request.uri().toString(),
+        )
+        assertEquals(
+            """[{"command":"start","description":"Показать меню"},{"command":"menu","description":"Показать меню"}]""",
+            parameters["commands"],
+        )
+    }
+
+    @Test
     fun `callback query is parsed with source chat and callback data`() {
         val response = parseUpdates(
             """

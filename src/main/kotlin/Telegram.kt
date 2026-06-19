@@ -17,6 +17,8 @@ const val CALLBACK_LEARN_WORDS = "learn_words"
 const val CALLBACK_STATISTICS = "statistics"
 const val CALLBACK_RESET_PROGRESS = "reset_progress"
 const val CALLBACK_DATA_ANSWER_PREFIX = "answer_"
+const val COMMAND_START = "start"
+const val COMMAND_MENU = "menu"
 
 private val telegramHttpClient: HttpClient = HttpClient.newHttpClient()
 private val telegramJson = Json { ignoreUnknownKeys = true }
@@ -25,6 +27,14 @@ private val telegramJson = Json { ignoreUnknownKeys = true }
 data class TelegramUpdatesResponse(
     val ok: Boolean,
     val result: List<TelegramUpdate> = emptyList(),
+    @SerialName("error_code")
+    val errorCode: Int? = null,
+    val description: String? = null,
+)
+
+@Serializable
+data class TelegramApiResponse(
+    val ok: Boolean,
     @SerialName("error_code")
     val errorCode: Int? = null,
     val description: String? = null,
@@ -56,6 +66,19 @@ data class TelegramCallbackQuery(
     val message: TelegramMessage? = null,
     val data: String? = null,
 )
+
+@Serializable
+data class TelegramBotCommand(
+    val command: String,
+    val description: String,
+) {
+    init {
+        require(command.matches(Regex("[a-z0-9_]{1,32}"))) {
+            "Команда Telegram должна содержать от 1 до 32 символов: a-z, 0-9 или _."
+        }
+        require(description.isNotBlank()) { "Описание команды не должно быть пустым." }
+    }
+}
 
 @Serializable
 data class InlineKeyboardButton(
@@ -91,12 +114,19 @@ val mainMenuKeyboard = InlineKeyboardMarkup(
     ),
 )
 
+val botMenuCommands = listOf(
+    TelegramBotCommand(COMMAND_START, "Показать меню"),
+    TelegramBotCommand(COMMAND_MENU, "Показать меню"),
+)
+
 fun main(args: Array<String>) {
     val botToken = resolveBotToken(args)
     val trainers = mutableMapOf<Long, LearnWordsTrainer>()
     var updateId = 0L
 
+    setBotCommands(botToken)
     println("Бот запущен. Отправьте сообщение или /start вашему боту в Telegram.")
+    println("Меню команд Telegram обновлено: /start, /menu.")
     println("Для остановки нажмите Ctrl+C.")
 
     while (true) {
@@ -169,10 +199,22 @@ fun parseUpdates(responseBody: String): TelegramUpdatesResponse =
     telegramJson.decodeFromString(responseBody)
 
 fun ensureTelegramApiResponseOk(response: TelegramUpdatesResponse) {
-    check(response.ok) {
+    ensureTelegramApiResponseOk(response.ok, response.errorCode, response.description)
+}
+
+fun ensureTelegramApiResponseOk(response: TelegramApiResponse) {
+    ensureTelegramApiResponseOk(response.ok, response.errorCode, response.description)
+}
+
+private fun ensureTelegramApiResponseOk(
+    ok: Boolean,
+    errorCode: Int?,
+    description: String?,
+) {
+    check(ok) {
         val details = listOfNotNull(
-            response.errorCode?.let { "код $it" },
-            response.description,
+            errorCode?.let { "код $it" },
+            description,
         ).joinToString(": ")
         if (details.isBlank()) {
             "Telegram API вернул ошибку. Проверьте токен и что не запущена другая копия бота."
@@ -180,6 +222,23 @@ fun ensureTelegramApiResponseOk(response: TelegramUpdatesResponse) {
             "Telegram API вернул ошибку ($details). Проверьте токен и что не запущена другая копия бота."
         }
     }
+}
+
+fun setBotCommands(botToken: String): String {
+    val request = createSetBotCommandsRequest(botToken)
+    val response = telegramHttpClient.send(request, HttpResponse.BodyHandlers.ofString())
+    ensureTelegramApiResponseOk(telegramJson.decodeFromString<TelegramApiResponse>(response.body()))
+    return response.body()
+}
+
+fun createSetBotCommandsRequest(botToken: String): HttpRequest {
+    require(botToken.isNotBlank()) { "Токен Telegram-бота не должен быть пустым." }
+
+    return HttpRequest.newBuilder()
+        .uri(URI.create("$TELEGRAM_BASE_URL/bot$botToken/setMyCommands"))
+        .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+        .POST(HttpRequest.BodyPublishers.ofString("commands=${urlEncode(telegramJson.encodeToString(botMenuCommands))}"))
+        .build()
 }
 
 fun getUpdates(botToken: String, updateId: Long): String {
