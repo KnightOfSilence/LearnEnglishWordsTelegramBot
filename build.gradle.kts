@@ -2,6 +2,7 @@ plugins {
     application
     kotlin("jvm") version "2.2.0"
     kotlin("plugin.serialization") version "2.2.0"
+    id("com.gradleup.shadow") version "8.3.6"
 }
 
 group = "org.example"
@@ -22,6 +23,22 @@ tasks.test {
 
 application {
     mainClass.set("TelegramKt")
+}
+
+tasks.shadowJar {
+    archiveBaseName.set("WordsTelegramBot")
+    archiveClassifier.set("all")
+    manifest {
+        attributes["Main-Class"] = application.mainClass.get()
+    }
+}
+
+tasks.jar {
+    enabled = false
+}
+
+tasks.build {
+    dependsOn(tasks.shadowJar)
 }
 
 kotlin {

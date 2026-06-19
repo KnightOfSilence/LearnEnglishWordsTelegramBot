@@ -25,6 +25,9 @@ private val telegramJson = Json { ignoreUnknownKeys = true }
 data class TelegramUpdatesResponse(
     val ok: Boolean,
     val result: List<TelegramUpdate> = emptyList(),
+    @SerialName("error_code")
+    val errorCode: Int? = null,
+    val description: String? = null,
 )
 
 @Serializable
@@ -92,10 +95,18 @@ fun main(args: Array<String>) {
     val botToken = resolveBotToken(args)
     val trainers = mutableMapOf<Long, LearnWordsTrainer>()
     var updateId = 0L
+
+    println("Бот запущен. Отправьте сообщение или /start вашему боту в Telegram.")
+    println("Для остановки нажмите Ctrl+C.")
+
     while (true) {
         Thread.sleep(3000)
         val updates = parseUpdates(getUpdates(botToken, updateId))
+        ensureTelegramApiResponseOk(updates)
 
+        if (updates.result.isNotEmpty()) {
+            println("Получено обновлений: ${updates.result.size}")
+        }
         updates.result.sortedBy { it.updateId }.forEach { update ->
             handleUpdate(
                 botToken = botToken,
@@ -156,6 +167,20 @@ fun resolveBotToken(
 
 fun parseUpdates(responseBody: String): TelegramUpdatesResponse =
     telegramJson.decodeFromString(responseBody)
+
+fun ensureTelegramApiResponseOk(response: TelegramUpdatesResponse) {
+    check(response.ok) {
+        val details = listOfNotNull(
+            response.errorCode?.let { "код $it" },
+            response.description,
+        ).joinToString(": ")
+        if (details.isBlank()) {
+            "Telegram API вернул ошибку. Проверьте токен и что не запущена другая копия бота."
+        } else {
+            "Telegram API вернул ошибку ($details). Проверьте токен и что не запущена другая копия бота."
+        }
+    }
+}
 
 fun getUpdates(botToken: String, updateId: Long): String {
     val urlGetUpdates = "$TELEGRAM_BASE_URL/bot$botToken/getUpdates?offset=$updateId"
