@@ -86,6 +86,47 @@ class TelegramTest {
     }
 
     @Test
+    fun `telegram api error is parsed and reported`() {
+        val response = parseUpdates(
+            """
+            {
+              "ok": false,
+              "error_code": 401,
+              "description": "Unauthorized"
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(false, response.ok)
+        assertEquals(401, response.errorCode)
+        assertEquals("Unauthorized", response.description)
+
+        val error = assertFailsWith<IllegalStateException> {
+            ensureTelegramApiResponseOk(response)
+        }
+        assertEquals(
+            "Telegram API вернул ошибку (код 401: Unauthorized). Проверьте токен и что не запущена другая копия бота.",
+            error.message,
+        )
+    }
+
+    @Test
+    fun `bot menu commands request serializes telegram commands`() {
+        val request = createSetBotCommandsRequest("token")
+        val parameters = parseFormBody(readBody(request))
+
+        assertEquals("POST", request.method())
+        assertEquals(
+            "https://api.telegram.org/bottoken/setMyCommands",
+            request.uri().toString(),
+        )
+        assertEquals(
+            """[{"command":"start","description":"Показать меню"},{"command":"menu","description":"Показать меню"}]""",
+            parameters["commands"],
+        )
+    }
+
+    @Test
     fun `callback query is parsed with source chat and callback data`() {
         val response = parseUpdates(
             """
