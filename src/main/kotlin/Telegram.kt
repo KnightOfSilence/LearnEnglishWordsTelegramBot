@@ -114,29 +114,21 @@ fun createTrainerForChat(
     chatId: Long,
     sourceDictionary: File = File("words.txt"),
     progressDirectory: File = File("user-progress"),
+    environment: Map<String, String> = System.getenv(),
+    localPropertiesFile: File = File(LOCAL_PROPERTIES_FILE_NAME),
+    initialDictionaryLoader: () -> List<Word> = {
+        loadInitialDictionary(sourceDictionary, environment, localPropertiesFile)
+    },
 ): LearnWordsTrainer {
     val progressFile = File(progressDirectory, "$chatId.txt")
     if (!progressFile.exists()) {
         progressFile.parentFile?.mkdirs()
-        val initialDictionary = if (sourceDictionary.exists()) {
-            sourceDictionary.readLines().mapNotNull { line ->
-                val parts = line.split("|").map(String::trim)
-                val original = parts.getOrNull(0).orEmpty()
-                val translated = parts.getOrNull(1).orEmpty()
-                if (original.isBlank() || translated.isBlank()) {
-                    null
-                } else {
-                    "$original|$translated|0"
-                }
-            }
-        } else {
-            emptyList()
-        }
+        val initialDictionary = initialDictionaryLoader()
         progressFile.writeText(
             initialDictionary.joinToString(
                 separator = "\n",
                 postfix = if (initialDictionary.isEmpty()) "" else "\n",
-            ),
+            ) { "${it.original}|${it.translated}|${it.correctAnswersCount}" },
         )
     }
     return LearnWordsTrainer(progressFile)
