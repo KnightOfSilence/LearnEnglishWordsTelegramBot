@@ -77,10 +77,7 @@ class YandexDictionaryTest {
 
     @Test
     fun `initial dictionary prefers yandex when api key is configured`() {
-        val sourceDictionary = createDictionaryFile("local|локальный|0")
-
         val initialDictionary = loadInitialDictionary(
-            sourceDictionary = sourceDictionary,
             environment = mapOf(
                 YANDEX_DICTIONARY_API_KEY_ENV to "api-key",
                 YANDEX_DICTIONARY_LANG_ENV to "en-ru",
@@ -99,7 +96,6 @@ class YandexDictionaryTest {
 
     @Test
     fun `initial dictionary uses local properties api key when environment key is absent`() {
-        val sourceDictionary = createDictionaryFile("local|локальный|0")
         val localProperties = createPropertiesFile(
             """
             $YANDEX_DICTIONARY_API_KEY_ENV=local-api-key
@@ -108,7 +104,6 @@ class YandexDictionaryTest {
         )
 
         val initialDictionary = loadInitialDictionary(
-            sourceDictionary = sourceDictionary,
             environment = emptyMap(),
             localPropertiesFile = localProperties,
             yandexDictionaryLoader = { apiKey, lang, words ->
@@ -123,29 +118,36 @@ class YandexDictionaryTest {
     }
 
     @Test
-    fun `initial dictionary falls back to local file without yandex api key`() {
-        val sourceDictionary = createDictionaryFile(
-            """
-            cat|кошка|3
-            dog|собака|0
-            broken
-            """.trimIndent(),
-        )
+    fun `initial dictionary requires yandex api key`() {
+        val error = assertFailsWith<IllegalStateException> {
+            loadInitialDictionary(
+                environment = emptyMap(),
+                localPropertiesFile = createPropertiesFile(""),
+            )
+        }
 
         assertEquals(
-            listOf(Word("cat", "кошка"), Word("dog", "собака")),
-            loadInitialDictionary(
-                sourceDictionary = sourceDictionary,
-                environment = emptyMap(),
-                localPropertiesFile = File(sourceDictionary.parentFile, "missing.properties"),
-            ),
+            "Для загрузки словаря задайте $YANDEX_DICTIONARY_API_KEY_ENV " +
+                "в переменных окружения или в $LOCAL_PROPERTIES_FILE_NAME.",
+            error.message,
         )
     }
 
-    private fun createDictionaryFile(content: String): File =
-        kotlin.io.path.createTempFile(prefix = "yandex-dictionary-", suffix = ".txt")
-            .toFile()
-            .apply { writeText(content) }
+    @Test
+    fun `initial dictionary requires configured yandex words`() {
+        val error = assertFailsWith<IllegalStateException> {
+            loadInitialDictionary(
+                environment = mapOf(YANDEX_DICTIONARY_API_KEY_ENV to "api-key"),
+                localPropertiesFile = createPropertiesFile(""),
+            )
+        }
+
+        assertEquals(
+            "Для загрузки словаря задайте $YANDEX_DICTIONARY_WORDS_ENV " +
+                "в переменных окружения или в $LOCAL_PROPERTIES_FILE_NAME.",
+            error.message,
+        )
+    }
 
     private fun createPropertiesFile(content: String): File =
         kotlin.io.path.createTempFile(prefix = "local-", suffix = ".properties")

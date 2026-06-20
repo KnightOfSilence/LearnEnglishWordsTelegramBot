@@ -17,19 +17,6 @@ const val YANDEX_DICTIONARY_WORDS_ENV = "YANDEX_DICTIONARY_WORDS"
 const val YANDEX_DICTIONARY_DEFAULT_LANG = "en-ru"
 const val LOCAL_PROPERTIES_FILE_NAME = "local.properties"
 
-val defaultYandexDictionaryWords = listOf(
-    "cat",
-    "dog",
-    "house",
-    "book",
-    "water",
-    "sun",
-    "work",
-    "family",
-    "school",
-    "friend",
-)
-
 @Serializable
 data class YandexLookupResponse(
     val def: List<YandexDefinition> = emptyList(),
@@ -99,7 +86,6 @@ class YandexDictionaryClient(
 }
 
 fun loadInitialDictionary(
-    sourceDictionary: File,
     environment: Map<String, String> = System.getenv(),
     localPropertiesFile: File = File(LOCAL_PROPERTIES_FILE_NAME),
     yandexDictionaryLoader: (String, String, List<String>) -> List<Word> = { apiKey, lang, words ->
@@ -108,18 +94,23 @@ fun loadInitialDictionary(
 ): List<Word> {
     val localProperties = loadLocalProperties(localPropertiesFile)
     val apiKey = findConfigValue(YANDEX_DICTIONARY_API_KEY_ENV, environment, localProperties)
-    if (apiKey != null) {
-        val lang = findConfigValue(YANDEX_DICTIONARY_LANG_ENV, environment, localProperties)
-            ?: YANDEX_DICTIONARY_DEFAULT_LANG
-        val words = parseYandexDictionaryWords(
-            findConfigValue(YANDEX_DICTIONARY_WORDS_ENV, environment, localProperties),
+        ?: error(
+            "Для загрузки словаря задайте $YANDEX_DICTIONARY_API_KEY_ENV " +
+                "в переменных окружения или в $LOCAL_PROPERTIES_FILE_NAME.",
         )
-            .ifEmpty { defaultYandexDictionaryWords }
+    val lang = findConfigValue(YANDEX_DICTIONARY_LANG_ENV, environment, localProperties)
+        ?: YANDEX_DICTIONARY_DEFAULT_LANG
+    val words = parseYandexDictionaryWords(
+        findConfigValue(YANDEX_DICTIONARY_WORDS_ENV, environment, localProperties),
+    )
+        .ifEmpty {
+            error(
+                "Для загрузки словаря задайте $YANDEX_DICTIONARY_WORDS_ENV " +
+                    "в переменных окружения или в $LOCAL_PROPERTIES_FILE_NAME.",
+            )
+        }
 
-        return yandexDictionaryLoader(apiKey, lang, words)
-    }
-
-    return loadDictionaryFromFile(sourceDictionary)
+    return yandexDictionaryLoader(apiKey, lang, words)
 }
 
 fun loadLocalProperties(localPropertiesFile: File): Map<String, String> {
@@ -130,23 +121,6 @@ fun loadLocalProperties(localPropertiesFile: File): Map<String, String> {
     val properties = Properties()
     localPropertiesFile.inputStream().use(properties::load)
     return properties.entries.associate { (key, value) -> key.toString() to value.toString() }
-}
-
-fun loadDictionaryFromFile(sourceDictionary: File): List<Word> {
-    if (!sourceDictionary.exists()) {
-        return emptyList()
-    }
-
-    return sourceDictionary.readLines().mapNotNull { line ->
-        val parts = line.split("|").map(String::trim)
-        val original = parts.getOrNull(0).orEmpty()
-        val translated = parts.getOrNull(1).orEmpty()
-        if (original.isBlank() || translated.isBlank()) {
-            null
-        } else {
-            Word(original, translated)
-        }
-    }
 }
 
 fun parseYandexDictionaryWords(rawWords: String?): List<String> =

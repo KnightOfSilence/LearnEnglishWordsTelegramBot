@@ -154,12 +154,11 @@ fun main(args: Array<String>) {
 
 fun createTrainerForChat(
     chatId: Long,
-    sourceDictionary: File = File("words.txt"),
     progressDirectory: File = File("user-progress"),
     environment: Map<String, String> = System.getenv(),
     localPropertiesFile: File = File(LOCAL_PROPERTIES_FILE_NAME),
     initialDictionaryLoader: () -> List<Word> = {
-        loadInitialDictionary(sourceDictionary, environment, localPropertiesFile)
+        loadInitialDictionary(environment, localPropertiesFile)
     },
 ): LearnWordsTrainer {
     val progressFile = File(progressDirectory, "$chatId.txt")

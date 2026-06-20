@@ -433,11 +433,18 @@ class TelegramTest {
     @Test
     fun `chat trainers have independent persistent progress`() {
         val root = kotlin.io.path.createTempDirectory("telegram-progress-").toFile()
-        val source = File(root, "words.txt").apply { writeText("cat|кошка|2\n") }
         val progressDirectory = File(root, "users")
-        val localPropertiesFile = File(root, "missing.properties")
-        val firstTrainer = createTrainerForChat(111, source, progressDirectory, localPropertiesFile = localPropertiesFile)
-        val secondTrainer = createTrainerForChat(222, source, progressDirectory, localPropertiesFile = localPropertiesFile)
+        val initialDictionaryLoader = { listOf(Word("cat", "кошка")) }
+        val firstTrainer = createTrainerForChat(
+            chatId = 111,
+            progressDirectory = progressDirectory,
+            initialDictionaryLoader = initialDictionaryLoader,
+        )
+        val secondTrainer = createTrainerForChat(
+            chatId = 222,
+            progressDirectory = progressDirectory,
+            initialDictionaryLoader = initialDictionaryLoader,
+        )
 
         repeat(3) {
             val question = assertNotNull(firstTrainer.getNextQuestion())
@@ -448,9 +455,12 @@ class TelegramTest {
         assertEquals(Statistics(0, 1, 0), secondTrainer.getStatistics())
         assertEquals(
             Statistics(1, 1, 100),
-            createTrainerForChat(111, source, progressDirectory, localPropertiesFile = localPropertiesFile).getStatistics(),
+            createTrainerForChat(
+                chatId = 111,
+                progressDirectory = progressDirectory,
+                initialDictionaryLoader = initialDictionaryLoader,
+            ).getStatistics(),
         )
-        assertEquals("cat|кошка|2", source.readText().trim())
     }
 
     @Test
@@ -460,7 +470,6 @@ class TelegramTest {
 
         val trainer = createTrainerForChat(
             chatId = 333,
-            sourceDictionary = File(root, "missing.txt"),
             progressDirectory = progressDirectory,
             environment = emptyMap(),
             initialDictionaryLoader = {

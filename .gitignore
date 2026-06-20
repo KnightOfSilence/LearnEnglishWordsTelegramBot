@@ -2,6 +2,7 @@
 .gradle-local/
 build/
 user-progress/
+words.txt
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
