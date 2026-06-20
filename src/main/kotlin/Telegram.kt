@@ -313,7 +313,7 @@ private fun handleAnswer(
     val resultText = if (isCorrect) {
         "Правильно! $CORRECT_ANSWER_EMOJI"
     } else {
-        "Неправильно! $INCORRECT_ANSWER_EMOJI ${question.correctWord.original} - ${question.correctWord.translated}"
+        "Неправильно! $INCORRECT_ANSWER_EMOJI"
     }
     messageSender(botToken, chatId, resultText, null)
     sendNextQuestion(botToken, chatId, trainer, messageSender, questionSender)

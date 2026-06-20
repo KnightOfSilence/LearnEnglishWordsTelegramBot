@@ -364,7 +364,7 @@ class TelegramTest {
         )
 
         assertEquals(
-            listOf("Неправильно! $INCORRECT_ANSWER_EMOJI ${question.correctWord.original} - ${question.correctWord.translated}"),
+            listOf("Неправильно! $INCORRECT_ANSWER_EMOJI"),
             sentMessages,
         )
         assertEquals(0, question.correctWord.correctAnswersCount)
