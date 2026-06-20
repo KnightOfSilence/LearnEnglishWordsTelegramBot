@@ -394,8 +394,9 @@ class TelegramTest {
         val root = kotlin.io.path.createTempDirectory("telegram-progress-").toFile()
         val source = File(root, "words.txt").apply { writeText("cat|кошка|2\n") }
         val progressDirectory = File(root, "users")
-        val firstTrainer = createTrainerForChat(111, source, progressDirectory)
-        val secondTrainer = createTrainerForChat(222, source, progressDirectory)
+        val localPropertiesFile = File(root, "missing.properties")
+        val firstTrainer = createTrainerForChat(111, source, progressDirectory, localPropertiesFile = localPropertiesFile)
+        val secondTrainer = createTrainerForChat(222, source, progressDirectory, localPropertiesFile = localPropertiesFile)
 
         repeat(3) {
             val question = assertNotNull(firstTrainer.getNextQuestion())
@@ -406,9 +407,34 @@ class TelegramTest {
         assertEquals(Statistics(0, 1, 0), secondTrainer.getStatistics())
         assertEquals(
             Statistics(1, 1, 100),
-            createTrainerForChat(111, source, progressDirectory).getStatistics(),
+            createTrainerForChat(111, source, progressDirectory, localPropertiesFile = localPropertiesFile).getStatistics(),
         )
         assertEquals("cat|кошка|2", source.readText().trim())
+    }
+
+    @Test
+    fun `chat trainer can initialize progress from online dictionary loader`() {
+        val root = kotlin.io.path.createTempDirectory("telegram-online-dictionary-").toFile()
+        val progressDirectory = File(root, "users")
+
+        val trainer = createTrainerForChat(
+            chatId = 333,
+            sourceDictionary = File(root, "missing.txt"),
+            progressDirectory = progressDirectory,
+            environment = emptyMap(),
+            initialDictionaryLoader = {
+                listOf(Word("cat", "кошка"), Word("dog", "собака"))
+            },
+        )
+
+        assertEquals(Statistics(0, 2, 0), trainer.getStatistics())
+        assertEquals(
+            """
+            cat|кошка|0
+            dog|собака|0
+            """.trimIndent(),
+            File(progressDirectory, "333.txt").readText().trim(),
+        )
     }
 
     @Test
