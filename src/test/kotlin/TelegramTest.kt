@@ -322,7 +322,7 @@ class TelegramTest {
             callbackAnswerer = { _, _ -> "true" },
         )
 
-        assertEquals(listOf("Правильно!"), sentMessages)
+        assertEquals(listOf("Правильно! $CORRECT_ANSWER_EMOJI"), sentMessages)
         assertEquals(1, question.correctWord.correctAnswersCount)
         assertEquals(1, sentQuestions.size)
         assertEquals(trainer.currentQuestion, sentQuestions.single())
@@ -364,7 +364,7 @@ class TelegramTest {
         )
 
         assertEquals(
-            listOf("Неправильно! ${question.correctWord.original} - ${question.correctWord.translated}"),
+            listOf("Неправильно! $INCORRECT_ANSWER_EMOJI"),
             sentMessages,
         )
         assertEquals(0, question.correctWord.correctAnswersCount)

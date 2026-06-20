@@ -18,6 +18,8 @@ const val CALLBACK_LEARN_WORDS = "learn_words"
 const val CALLBACK_STATISTICS = "statistics"
 const val CALLBACK_RESET_PROGRESS = "reset_progress"
 const val CALLBACK_DATA_ANSWER_PREFIX = "answer_"
+const val CORRECT_ANSWER_EMOJI = "😊"
+const val INCORRECT_ANSWER_EMOJI = "😢"
 const val COMMAND_START = "start"
 const val COMMAND_MENU = "menu"
 
@@ -309,9 +311,9 @@ private fun handleAnswer(
 
     val isCorrect = trainer.checkAnswer(answerIndex + 1)
     val resultText = if (isCorrect) {
-        "Правильно!"
+        "Правильно! $CORRECT_ANSWER_EMOJI"
     } else {
-        "Неправильно! ${question.correctWord.original} - ${question.correctWord.translated}"
+        "Неправильно! $INCORRECT_ANSWER_EMOJI"
     }
     messageSender(botToken, chatId, resultText, null)
     sendNextQuestion(botToken, chatId, trainer, messageSender, questionSender)
