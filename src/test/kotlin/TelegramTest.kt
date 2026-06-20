@@ -435,8 +435,9 @@ class TelegramTest {
         val root = kotlin.io.path.createTempDirectory("telegram-progress-").toFile()
         val source = File(root, "words.txt").apply { writeText("cat|кошка|2\n") }
         val progressDirectory = File(root, "users")
-        val firstTrainer = createTrainerForChat(111, source, progressDirectory)
-        val secondTrainer = createTrainerForChat(222, source, progressDirectory)
+        val localPropertiesFile = File(root, "missing.properties")
+        val firstTrainer = createTrainerForChat(111, source, progressDirectory, localPropertiesFile = localPropertiesFile)
+        val secondTrainer = createTrainerForChat(222, source, progressDirectory, localPropertiesFile = localPropertiesFile)
 
         repeat(3) {
             val question = assertNotNull(firstTrainer.getNextQuestion())
@@ -447,9 +448,34 @@ class TelegramTest {
         assertEquals(Statistics(0, 1, 0), secondTrainer.getStatistics())
         assertEquals(
             Statistics(1, 1, 100),
-            createTrainerForChat(111, source, progressDirectory).getStatistics(),
+            createTrainerForChat(111, source, progressDirectory, localPropertiesFile = localPropertiesFile).getStatistics(),
         )
         assertEquals("cat|кошка|2", source.readText().trim())
+    }
+
+    @Test
+    fun `chat trainer can initialize progress from online dictionary loader`() {
+        val root = kotlin.io.path.createTempDirectory("telegram-online-dictionary-").toFile()
+        val progressDirectory = File(root, "users")
+
+        val trainer = createTrainerForChat(
+            chatId = 333,
+            sourceDictionary = File(root, "missing.txt"),
+            progressDirectory = progressDirectory,
+            environment = emptyMap(),
+            initialDictionaryLoader = {
+                listOf(Word("cat", "кошка"), Word("dog", "собака"))
+            },
+        )
+
+        assertEquals(Statistics(0, 2, 0), trainer.getStatistics())
+        assertEquals(
+            """
+            cat|кошка|0
+            dog|собака|0
+            """.trimIndent(),
+            File(progressDirectory, "333.txt").readText().trim(),
+        )
     }
 
     @Test
@@ -492,6 +518,7 @@ class TelegramTest {
         val parameters = parseFormBody(readBody(request))
 
         assertEquals("cat", parameters["text"])
+        assertEquals("true", parameters["disable_notification"])
         assertEquals(
             """{"inline_keyboard":[[{"text":"кошка","callback_data":"answer_0"}],[{"text":"собака","callback_data":"answer_1"}]]}""",
             parameters["reply_markup"],
@@ -516,9 +543,17 @@ class TelegramTest {
             request.uri().toString(),
         )
         assertEquals(
-            "chat_id=-123&text=%D0%9F%D1%80%D0%B8%D0%B2%D0%B5%D1%82+%26+hello",
+            "chat_id=-123&text=%D0%9F%D1%80%D0%B8%D0%B2%D0%B5%D1%82+%26+hello&disable_notification=true",
             readBody(request),
         )
+    }
+
+    @Test
+    fun `send message request disables telegram notification sounds by default`() {
+        val request = createSendMessageRequest("token", 123, "Тихое сообщение")
+        val parameters = parseFormBody(readBody(request))
+
+        assertEquals("true", parameters["disable_notification"])
     }
 
     @Test
@@ -545,6 +580,7 @@ class TelegramTest {
 
         assertEquals("123", parameters["chat_id"])
         assertEquals("Меню", parameters["text"])
+        assertEquals("true", parameters["disable_notification"])
         assertEquals(
             """{"inline_keyboard":[[{"text":"Учить слова","callback_data":"learn_words"}],[{"text":"Статистика","callback_data":"statistics"}],[{"text":"Сбросить прогресс","callback_data":"reset_progress"}]]}""",
             parameters["reply_markup"],

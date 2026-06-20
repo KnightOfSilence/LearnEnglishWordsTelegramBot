@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets
 const val TELEGRAM_BASE_URL = "https://api.telegram.org"
 const val TELEGRAM_MESSAGE_MAX_LENGTH = 4096
 const val TELEGRAM_CALLBACK_DATA_MAX_BYTES = 64
+const val TELEGRAM_DISABLE_NOTIFICATION = true
 const val CALLBACK_LEARN_WORDS = "learn_words"
 const val CALLBACK_STATISTICS = "statistics"
 const val CALLBACK_RESET_PROGRESS = "reset_progress"
@@ -155,29 +156,21 @@ fun createTrainerForChat(
     chatId: Long,
     sourceDictionary: File = File("words.txt"),
     progressDirectory: File = File("user-progress"),
+    environment: Map<String, String> = System.getenv(),
+    localPropertiesFile: File = File(LOCAL_PROPERTIES_FILE_NAME),
+    initialDictionaryLoader: () -> List<Word> = {
+        loadInitialDictionary(sourceDictionary, environment, localPropertiesFile)
+    },
 ): LearnWordsTrainer {
     val progressFile = File(progressDirectory, "$chatId.txt")
     if (!progressFile.exists()) {
         progressFile.parentFile?.mkdirs()
-        val initialDictionary = if (sourceDictionary.exists()) {
-            sourceDictionary.readLines().mapNotNull { line ->
-                val parts = line.split("|").map(String::trim)
-                val original = parts.getOrNull(0).orEmpty()
-                val translated = parts.getOrNull(1).orEmpty()
-                if (original.isBlank() || translated.isBlank()) {
-                    null
-                } else {
-                    "$original|$translated|0"
-                }
-            }
-        } else {
-            emptyList()
-        }
+        val initialDictionary = initialDictionaryLoader()
         progressFile.writeText(
             initialDictionary.joinToString(
                 separator = "\n",
                 postfix = if (initialDictionary.isEmpty()) "" else "\n",
-            ),
+            ) { "${it.original}|${it.translated}|${it.correctAnswersCount}" },
         )
     }
     return LearnWordsTrainer(progressFile)
@@ -383,6 +376,7 @@ fun createSendMessageRequest(
     chatId: Long,
     text: String,
     replyMarkup: InlineKeyboardMarkup? = null,
+    disableNotification: Boolean = TELEGRAM_DISABLE_NOTIFICATION,
 ): HttpRequest {
     require(botToken.isNotBlank()) { "Токен Telegram-бота не должен быть пустым." }
     val textLength = text.codePointCount(0, text.length)
@@ -393,6 +387,7 @@ fun createSendMessageRequest(
     val parameters = mutableListOf(
         "chat_id=$chatId",
         "text=${urlEncode(text)}",
+        "disable_notification=$disableNotification",
     )
     if (replyMarkup != null) {
         parameters += "reply_markup=${urlEncode(telegramJson.encodeToString(replyMarkup))}"
