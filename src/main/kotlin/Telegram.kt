@@ -17,6 +17,9 @@ const val TELEGRAM_DISABLE_NOTIFICATION = true
 const val CALLBACK_LEARN_WORDS = "learn_words"
 const val CALLBACK_STATISTICS = "statistics"
 const val CALLBACK_RESET_PROGRESS = "reset_progress"
+const val CALLBACK_LANGUAGE_ENGLISH = "language_english"
+const val CALLBACK_LANGUAGE_HEBREW = "language_hebrew"
+const val CALLBACK_LANGUAGE_SERBIAN = "language_serbian"
 const val CALLBACK_DATA_ANSWER_PREFIX = "answer_"
 const val CORRECT_ANSWER_EMOJI = "😊"
 const val INCORRECT_ANSWER_EMOJI = "😢"
@@ -113,8 +116,19 @@ val mainMenuKeyboard = InlineKeyboardMarkup(
     inlineKeyboard = listOf(
         listOf(InlineKeyboardButton("Учить слова", CALLBACK_LEARN_WORDS)),
         listOf(InlineKeyboardButton("Статистика", CALLBACK_STATISTICS)),
+        listOf(
+            InlineKeyboardButton("Английский", CALLBACK_LANGUAGE_ENGLISH),
+            InlineKeyboardButton("Иврит", CALLBACK_LANGUAGE_HEBREW),
+            InlineKeyboardButton("Сербский", CALLBACK_LANGUAGE_SERBIAN),
+        ),
         listOf(InlineKeyboardButton("Сбросить прогресс", CALLBACK_RESET_PROGRESS)),
     ),
+)
+
+val languageNamesByCallback = mapOf(
+    CALLBACK_LANGUAGE_ENGLISH to "Английский",
+    CALLBACK_LANGUAGE_HEBREW to "Иврит",
+    CALLBACK_LANGUAGE_SERBIAN to "Сербский",
 )
 
 val botMenuCommands = listOf(
@@ -271,6 +285,16 @@ fun handleUpdate(
             callback.data == CALLBACK_RESET_PROGRESS -> {
                 trainer.resetProgress()
                 messageSender(botToken, chatId, "Прогресс сброшен.", mainMenuKeyboard)
+            }
+
+            languageNamesByCallback[callback.data] != null -> {
+                val languageName = languageNamesByCallback.getValue(callback.data.orEmpty())
+                messageSender(
+                    botToken,
+                    chatId,
+                    "Выбран язык: $languageName",
+                    mainMenuKeyboard,
+                )
             }
 
             callback.data?.startsWith(CALLBACK_DATA_ANSWER_PREFIX) == true ->
