@@ -477,6 +477,7 @@ class TelegramTest {
         val parameters = parseFormBody(readBody(request))
 
         assertEquals("cat", parameters["text"])
+        assertEquals("true", parameters["disable_notification"])
         assertEquals(
             """{"inline_keyboard":[[{"text":"кошка","callback_data":"answer_0"}],[{"text":"собака","callback_data":"answer_1"}]]}""",
             parameters["reply_markup"],
@@ -501,9 +502,17 @@ class TelegramTest {
             request.uri().toString(),
         )
         assertEquals(
-            "chat_id=-123&text=%D0%9F%D1%80%D0%B8%D0%B2%D0%B5%D1%82+%26+hello",
+            "chat_id=-123&text=%D0%9F%D1%80%D0%B8%D0%B2%D0%B5%D1%82+%26+hello&disable_notification=true",
             readBody(request),
         )
+    }
+
+    @Test
+    fun `send message request disables telegram notification sounds by default`() {
+        val request = createSendMessageRequest("token", 123, "Тихое сообщение")
+        val parameters = parseFormBody(readBody(request))
+
+        assertEquals("true", parameters["disable_notification"])
     }
 
     @Test
@@ -530,6 +539,7 @@ class TelegramTest {
 
         assertEquals("123", parameters["chat_id"])
         assertEquals("Меню", parameters["text"])
+        assertEquals("true", parameters["disable_notification"])
         assertEquals(
             """{"inline_keyboard":[[{"text":"Учить слова","callback_data":"learn_words"}],[{"text":"Статистика","callback_data":"statistics"}],[{"text":"Сбросить прогресс","callback_data":"reset_progress"}]]}""",
             parameters["reply_markup"],
