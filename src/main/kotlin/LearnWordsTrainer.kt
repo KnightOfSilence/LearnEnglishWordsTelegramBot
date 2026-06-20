@@ -19,7 +19,7 @@ data class Statistics(
 )
 
 class LearnWordsTrainer(
-    private val wordsFile: File = File("words.txt"),
+    private val wordsFile: File = File("user-progress/console.txt"),
     private val learnedWordsThreshold: Int = 3,
     private val numberOfOptions: Int = 4,
     private val random: Random = Random.Default,
