@@ -620,7 +620,7 @@ class TelegramTest {
         assertEquals("Меню", parameters["text"])
         assertEquals("true", parameters["disable_notification"])
         assertEquals(
-            """{"inline_keyboard":[[{"text":"Учить слова","callback_data":"learn_words"}],[{"text":"Статистика","callback_data":"statistics"}],[{"text":"Английский","callback_data":"language_english"},{"text":"Иврит","callback_data":"language_hebrew"},{"text":"Сербский","callback_data":"language_serbian"}],[{"text":"Сбросить прогресс","callback_data":"reset_progress"}]]}""",
+            """{"inline_keyboard":[[{"text":"Учиться","callback_data":"learn_words"}],[{"text":"Статистика","callback_data":"statistics"}],[{"text":"Английский","callback_data":"language_english"},{"text":"Иврит","callback_data":"language_hebrew"},{"text":"Сербский","callback_data":"language_serbian"}],[{"text":"Сбросить прогресс","callback_data":"reset_progress"}]]}""",
             parameters["reply_markup"],
         )
     }

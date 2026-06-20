@@ -114,7 +114,7 @@ data class InlineKeyboardMarkup(
 
 val mainMenuKeyboard = InlineKeyboardMarkup(
     inlineKeyboard = listOf(
-        listOf(InlineKeyboardButton("Учить слова", CALLBACK_LEARN_WORDS)),
+        listOf(InlineKeyboardButton("Учиться", CALLBACK_LEARN_WORDS)),
         listOf(InlineKeyboardButton("Статистика", CALLBACK_STATISTICS)),
         listOf(
             InlineKeyboardButton("Английский", CALLBACK_LANGUAGE_ENGLISH),
