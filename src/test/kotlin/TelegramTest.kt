@@ -431,6 +431,35 @@ class TelegramTest {
     }
 
     @Test
+    fun `language callback confirms selected language`() {
+        val trainer = createTrainer("cat|кошка|0")
+        val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+
+        handleUpdate(
+            botToken = "token",
+            update = TelegramUpdate(
+                updateId = 39,
+                callbackQuery = TelegramCallbackQuery(
+                    id = "callback-39",
+                    data = CALLBACK_LANGUAGE_HEBREW,
+                    message = TelegramMessage(TelegramChat(1005), "Выберите действие:"),
+                ),
+            ),
+            trainerProvider = { trainer },
+            messageSender = { _, chatId, text, keyboard ->
+                sentMessages += Triple(chatId, text, keyboard)
+                "{}"
+            },
+            callbackAnswerer = { _, _ -> "true" },
+        )
+
+        assertEquals(1, sentMessages.size)
+        assertEquals(1005L, sentMessages.single().first)
+        assertEquals("Выбран язык: Иврит", sentMessages.single().second)
+        assertEquals(mainMenuKeyboard, sentMessages.single().third)
+    }
+
+    @Test
     fun `chat trainers have independent persistent progress`() {
         val root = kotlin.io.path.createTempDirectory("telegram-progress-").toFile()
         val progressDirectory = File(root, "users")
@@ -591,7 +620,7 @@ class TelegramTest {
         assertEquals("Меню", parameters["text"])
         assertEquals("true", parameters["disable_notification"])
         assertEquals(
-            """{"inline_keyboard":[[{"text":"Учить слова","callback_data":"learn_words"}],[{"text":"Статистика","callback_data":"statistics"}],[{"text":"Сбросить прогресс","callback_data":"reset_progress"}]]}""",
+            """{"inline_keyboard":[[{"text":"Учиться","callback_data":"learn_words"}],[{"text":"Статистика","callback_data":"statistics"}],[{"text":"1. Английский","callback_data":"language_english"}],[{"text":"2. Иврит","callback_data":"language_hebrew"}],[{"text":"3. Сербский","callback_data":"language_serbian"}],[{"text":"Сбросить прогресс","callback_data":"reset_progress"}]]}""",
             parameters["reply_markup"],
         )
     }
