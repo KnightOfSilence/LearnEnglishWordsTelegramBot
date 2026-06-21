@@ -117,8 +117,6 @@ val mainMenuKeyboard = InlineKeyboardMarkup(
         listOf(InlineKeyboardButton("Учиться", CALLBACK_LEARN_WORDS)),
         listOf(InlineKeyboardButton("Статистика", CALLBACK_STATISTICS)),
         listOf(InlineKeyboardButton("1. Английский", CALLBACK_LANGUAGE_ENGLISH)),
-        listOf(InlineKeyboardButton("2. Иврит", CALLBACK_LANGUAGE_HEBREW)),
-        listOf(InlineKeyboardButton("3. Сербский", CALLBACK_LANGUAGE_SERBIAN)),
         listOf(InlineKeyboardButton("Сбросить прогресс", CALLBACK_RESET_PROGRESS)),
     ),
 )
