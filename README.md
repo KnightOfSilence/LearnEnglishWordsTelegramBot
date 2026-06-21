@@ -12,6 +12,13 @@
 `YANDEX_DICTIONARY_WORDS`, получает переводы из Yandex Dictionary и создаёт
 отдельный файл прогресса в папке `user-progress/`.
 
+В меню есть два раздела английского:
+
+- `1. Английский начальный` - работает как раньше и использует отдельные слова.
+- `2. Английский продвинутый` - использует словосочетания из
+  `YANDEX_DICTIONARY_PHRASES` и хранит прогресс в
+  `user-progress/<chat_id>-advanced.txt`.
+
 ## Запуск из Android Studio
 
 1. Откройте окно **Gradle**.
@@ -103,6 +110,7 @@ tail -f nohup.out
 TELEGRAM_BOT_TOKEN="<токен бота>" \
 YANDEX_DICTIONARY_API_KEY="<ключ Yandex Dictionary>" \
 YANDEX_DICTIONARY_WORDS="cat,dog,house,book" \
+YANDEX_DICTIONARY_PHRASES="make a decision,pay attention,take care" \
 ./gradlew run
 ```
 
@@ -111,6 +119,7 @@ YANDEX_DICTIONARY_WORDS="cat,dog,house,book" \
 ```properties
 YANDEX_DICTIONARY_API_KEY=<ключ Yandex Dictionary>
 YANDEX_DICTIONARY_WORDS=cat,dog,house,book
+YANDEX_DICTIONARY_PHRASES=make a decision,pay attention,take care
 ```
 
 Файл `local.properties` добавлен в `.gitignore`, поэтому он не должен попадать в
@@ -122,13 +131,20 @@ YANDEX_DICTIONARY_WORDS=cat,dog,house,book
 - `YANDEX_DICTIONARY_WORDS` - список английских слов через запятую, точку с запятой
   или перенос строки. Это обязательная настройка: Yandex Dictionary переводит
   переданные слова, но не выдаёт случайный список слов сам.
+- `YANDEX_DICTIONARY_PHRASES` - список английских словосочетаний для продвинутого
+  раздела через запятую, точку с запятой или перенос строки.
 - `YANDEX_DICTIONARY_LANG` - направление перевода. По умолчанию используется `en-ru`.
+- `YANDEX_DICTIONARY_PHRASES_LANG` - направление перевода для продвинутого
+  раздела. Если не задано, используется `YANDEX_DICTIONARY_LANG`, затем `en-ru`.
 
 Если не задавать `YANDEX_DICTIONARY_API_KEY` или `YANDEX_DICTIONARY_WORDS` ни в
 окружении, ни в `local.properties`, бот не сможет создать словарь для нового
 чата. Прогресс пользователей по-прежнему хранится отдельно в
 `user-progress/<chat_id>.txt`, поэтому разные чаты не перезаписывают результаты
 друг друга.
+
+Если выбрать продвинутый раздел, дополнительно нужна настройка
+`YANDEX_DICTIONARY_PHRASES`.
 
 ## Тихие уведомления
 

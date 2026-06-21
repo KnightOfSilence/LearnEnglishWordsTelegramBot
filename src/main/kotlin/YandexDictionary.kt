@@ -15,6 +15,8 @@ const val YANDEX_DICTIONARY_API_KEY_ENV = "YANDEX_DICTIONARY_API_KEY"
 const val YANDEX_DICTIONARY_LANG_ENV = "YANDEX_DICTIONARY_LANG"
 const val YANDEX_DICTIONARY_WORDS_ENV = "YANDEX_DICTIONARY_WORDS"
 const val YANDEX_DICTIONARY_DEFAULT_LANG = "en-ru"
+const val YANDEX_DICTIONARY_PHRASES_ENV = "YANDEX_DICTIONARY_PHRASES"
+const val YANDEX_DICTIONARY_PHRASES_LANG_ENV = "YANDEX_DICTIONARY_PHRASES_LANG"
 const val LOCAL_PROPERTIES_FILE_NAME = "local.properties"
 
 @Serializable
@@ -111,6 +113,35 @@ fun loadInitialDictionary(
         }
 
     return yandexDictionaryLoader(apiKey, lang, words)
+}
+
+fun loadAdvancedEnglishDictionary(
+    environment: Map<String, String> = System.getenv(),
+    localPropertiesFile: File = File(LOCAL_PROPERTIES_FILE_NAME),
+    yandexDictionaryLoader: (String, String, List<String>) -> List<Word> = { apiKey, lang, phrases ->
+        YandexDictionaryClient(apiKey = apiKey, lang = lang).loadWords(phrases)
+    },
+): List<Word> {
+    val localProperties = loadLocalProperties(localPropertiesFile)
+    val apiKey = findConfigValue(YANDEX_DICTIONARY_API_KEY_ENV, environment, localProperties)
+        ?: error(
+            "Для загрузки продвинутого словаря задайте $YANDEX_DICTIONARY_API_KEY_ENV " +
+                "в переменных окружения или в $LOCAL_PROPERTIES_FILE_NAME.",
+        )
+    val lang = findConfigValue(YANDEX_DICTIONARY_PHRASES_LANG_ENV, environment, localProperties)
+        ?: findConfigValue(YANDEX_DICTIONARY_LANG_ENV, environment, localProperties)
+        ?: YANDEX_DICTIONARY_DEFAULT_LANG
+    val phrases = parseYandexDictionaryWords(
+        findConfigValue(YANDEX_DICTIONARY_PHRASES_ENV, environment, localProperties),
+    )
+        .ifEmpty {
+            error(
+                "Для загрузки продвинутого словаря задайте $YANDEX_DICTIONARY_PHRASES_ENV " +
+                    "в переменных окружения или в $LOCAL_PROPERTIES_FILE_NAME.",
+            )
+        }
+
+    return yandexDictionaryLoader(apiKey, lang, phrases)
 }
 
 fun loadLocalProperties(localPropertiesFile: File): Map<String, String> {

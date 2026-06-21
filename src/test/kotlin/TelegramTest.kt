@@ -431,9 +431,10 @@ class TelegramTest {
     }
 
     @Test
-    fun `language callback confirms selected language`() {
+    fun `learning mode callback confirms selected section`() {
         val trainer = createTrainer("cat|кошка|0")
         val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+        val selectedModes = mutableListOf<Pair<Long, String>>()
 
         handleUpdate(
             botToken = "token",
@@ -441,11 +442,14 @@ class TelegramTest {
                 updateId = 39,
                 callbackQuery = TelegramCallbackQuery(
                     id = "callback-39",
-                    data = CALLBACK_LANGUAGE_HEBREW,
+                    data = CALLBACK_ENGLISH_ADVANCED,
                     message = TelegramMessage(TelegramChat(1005), "Выберите действие:"),
                 ),
             ),
             trainerProvider = { trainer },
+            learningModeSelector = { chatId, mode ->
+                selectedModes += chatId to mode
+            },
             messageSender = { _, chatId, text, keyboard ->
                 sentMessages += Triple(chatId, text, keyboard)
                 "{}"
@@ -455,15 +459,16 @@ class TelegramTest {
 
         assertEquals(1, sentMessages.size)
         assertEquals(1005L, sentMessages.single().first)
-        assertEquals("Выбран язык: Иврит", sentMessages.single().second)
+        assertEquals("Выбран раздел: Английский продвинутый", sentMessages.single().second)
         assertEquals(mainMenuKeyboard, sentMessages.single().third)
+        assertEquals(listOf(1005L to CALLBACK_ENGLISH_ADVANCED), selectedModes)
     }
 
     @Test
     fun `chat trainers have independent persistent progress`() {
         val root = kotlin.io.path.createTempDirectory("telegram-progress-").toFile()
         val progressDirectory = File(root, "users")
-        val initialDictionaryLoader = { listOf(Word("cat", "кошка")) }
+        val initialDictionaryLoader = { _: String -> listOf(Word("cat", "кошка")) }
         val firstTrainer = createTrainerForChat(
             chatId = 111,
             progressDirectory = progressDirectory,
@@ -493,6 +498,26 @@ class TelegramTest {
     }
 
     @Test
+    fun `advanced english trainer uses separate progress file`() {
+        val root = kotlin.io.path.createTempDirectory("telegram-advanced-progress-").toFile()
+        val progressDirectory = File(root, "users")
+
+        val trainer = createTrainerForChat(
+            chatId = 444,
+            learningModeCallback = CALLBACK_ENGLISH_ADVANCED,
+            progressDirectory = progressDirectory,
+            initialDictionaryLoader = { selectedMode ->
+                assertEquals(CALLBACK_ENGLISH_ADVANCED, selectedMode)
+                listOf(Word("make a decision", "принять решение"))
+            },
+        )
+
+        assertEquals(Statistics(0, 1, 0), trainer.getStatistics())
+        assertEquals("make a decision|принять решение|0", File(progressDirectory, "444-advanced.txt").readText().trim())
+        assertTrue(!File(progressDirectory, "444.txt").exists())
+    }
+
+    @Test
     fun `chat trainer can initialize progress from online dictionary loader`() {
         val root = kotlin.io.path.createTempDirectory("telegram-online-dictionary-").toFile()
         val progressDirectory = File(root, "users")
@@ -501,7 +526,7 @@ class TelegramTest {
             chatId = 333,
             progressDirectory = progressDirectory,
             environment = emptyMap(),
-            initialDictionaryLoader = {
+            initialDictionaryLoader = { _ ->
                 listOf(Word("cat", "кошка"), Word("dog", "собака"))
             },
         )
@@ -620,7 +645,7 @@ class TelegramTest {
         assertEquals("Меню", parameters["text"])
         assertEquals("true", parameters["disable_notification"])
         assertEquals(
-            """{"inline_keyboard":[[{"text":"Учиться","callback_data":"learn_words"}],[{"text":"Статистика","callback_data":"statistics"}],[{"text":"1. Английский","callback_data":"language_english"}],[{"text":"Сбросить прогресс","callback_data":"reset_progress"}]]}""",
+            """{"inline_keyboard":[[{"text":"Учиться","callback_data":"learn_words"}],[{"text":"Статистика","callback_data":"statistics"}],[{"text":"1. Английский начальный","callback_data":"english_beginner"}],[{"text":"2. Английский продвинутый","callback_data":"english_advanced"}],[{"text":"Сбросить прогресс","callback_data":"reset_progress"}]]}""",
             parameters["reply_markup"],
         )
     }

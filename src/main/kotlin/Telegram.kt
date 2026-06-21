@@ -17,9 +17,8 @@ const val TELEGRAM_DISABLE_NOTIFICATION = true
 const val CALLBACK_LEARN_WORDS = "learn_words"
 const val CALLBACK_STATISTICS = "statistics"
 const val CALLBACK_RESET_PROGRESS = "reset_progress"
-const val CALLBACK_LANGUAGE_ENGLISH = "language_english"
-const val CALLBACK_LANGUAGE_HEBREW = "language_hebrew"
-const val CALLBACK_LANGUAGE_SERBIAN = "language_serbian"
+const val CALLBACK_ENGLISH_BEGINNER = "english_beginner"
+const val CALLBACK_ENGLISH_ADVANCED = "english_advanced"
 const val CALLBACK_DATA_ANSWER_PREFIX = "answer_"
 const val CORRECT_ANSWER_EMOJI = "😊"
 const val INCORRECT_ANSWER_EMOJI = "😢"
@@ -116,15 +115,15 @@ val mainMenuKeyboard = InlineKeyboardMarkup(
     inlineKeyboard = listOf(
         listOf(InlineKeyboardButton("Учиться", CALLBACK_LEARN_WORDS)),
         listOf(InlineKeyboardButton("Статистика", CALLBACK_STATISTICS)),
-        listOf(InlineKeyboardButton("1. Английский", CALLBACK_LANGUAGE_ENGLISH)),
+        listOf(InlineKeyboardButton("1. Английский начальный", CALLBACK_ENGLISH_BEGINNER)),
+        listOf(InlineKeyboardButton("2. Английский продвинутый", CALLBACK_ENGLISH_ADVANCED)),
         listOf(InlineKeyboardButton("Сбросить прогресс", CALLBACK_RESET_PROGRESS)),
     ),
 )
 
-val languageNamesByCallback = mapOf(
-    CALLBACK_LANGUAGE_ENGLISH to "Английский",
-    CALLBACK_LANGUAGE_HEBREW to "Иврит",
-    CALLBACK_LANGUAGE_SERBIAN to "Сербский",
+val learningModeNamesByCallback = mapOf(
+    CALLBACK_ENGLISH_BEGINNER to "Английский начальный",
+    CALLBACK_ENGLISH_ADVANCED to "Английский продвинутый",
 )
 
 val botMenuCommands = listOf(
@@ -132,9 +131,15 @@ val botMenuCommands = listOf(
     TelegramBotCommand(COMMAND_MENU, "Показать меню"),
 )
 
+data class TrainerKey(
+    val chatId: Long,
+    val learningModeCallback: String,
+)
+
 fun main(args: Array<String>) {
     val botToken = resolveBotToken(args)
-    val trainers = mutableMapOf<Long, LearnWordsTrainer>()
+    val selectedLearningModes = mutableMapOf<Long, String>()
+    val trainers = mutableMapOf<TrainerKey, LearnWordsTrainer>()
     var updateId = 0L
 
     setBotCommands(botToken)
@@ -155,7 +160,13 @@ fun main(args: Array<String>) {
                 botToken = botToken,
                 update = update,
                 trainerProvider = { chatId ->
-                    trainers.getOrPut(chatId) { createTrainerForChat(chatId) }
+                    val learningMode = selectedLearningModes[chatId] ?: CALLBACK_ENGLISH_BEGINNER
+                    trainers.getOrPut(TrainerKey(chatId, learningMode)) {
+                        createTrainerForChat(chatId, learningMode)
+                    }
+                },
+                learningModeSelector = { chatId, learningMode ->
+                    selectedLearningModes[chatId] = learningMode
                 },
             )
         }
@@ -166,17 +177,18 @@ fun main(args: Array<String>) {
 
 fun createTrainerForChat(
     chatId: Long,
+    learningModeCallback: String = CALLBACK_ENGLISH_BEGINNER,
     progressDirectory: File = File("user-progress"),
     environment: Map<String, String> = System.getenv(),
     localPropertiesFile: File = File(LOCAL_PROPERTIES_FILE_NAME),
-    initialDictionaryLoader: () -> List<Word> = {
-        loadInitialDictionary(environment, localPropertiesFile)
+    initialDictionaryLoader: (String) -> List<Word> = { selectedLearningMode ->
+        loadInitialDictionaryForLearningMode(selectedLearningMode, environment, localPropertiesFile)
     },
 ): LearnWordsTrainer {
-    val progressFile = File(progressDirectory, "$chatId.txt")
+    val progressFile = createProgressFileForChat(chatId, learningModeCallback, progressDirectory)
     if (!progressFile.exists()) {
         progressFile.parentFile?.mkdirs()
-        val initialDictionary = initialDictionaryLoader()
+        val initialDictionary = initialDictionaryLoader(learningModeCallback)
         progressFile.writeText(
             initialDictionary.joinToString(
                 separator = "\n",
@@ -185,6 +197,30 @@ fun createTrainerForChat(
         )
     }
     return LearnWordsTrainer(progressFile)
+}
+
+fun loadInitialDictionaryForLearningMode(
+    learningModeCallback: String,
+    environment: Map<String, String> = System.getenv(),
+    localPropertiesFile: File = File(LOCAL_PROPERTIES_FILE_NAME),
+): List<Word> =
+    if (learningModeCallback == CALLBACK_ENGLISH_ADVANCED) {
+        loadAdvancedEnglishDictionary(environment, localPropertiesFile)
+    } else {
+        loadInitialDictionary(environment, localPropertiesFile)
+    }
+
+fun createProgressFileForChat(
+    chatId: Long,
+    learningModeCallback: String = CALLBACK_ENGLISH_BEGINNER,
+    progressDirectory: File = File("user-progress"),
+): File {
+    val fileName = if (learningModeCallback == CALLBACK_ENGLISH_ADVANCED) {
+        "$chatId-advanced.txt"
+    } else {
+        "$chatId.txt"
+    }
+    return File(progressDirectory, fileName)
 }
 
 fun resolveBotToken(
@@ -256,12 +292,12 @@ fun handleUpdate(
     botToken: String,
     update: TelegramUpdate,
     trainerProvider: (Long) -> LearnWordsTrainer,
+    learningModeSelector: (Long, String) -> Unit = { _, _ -> },
     messageSender: (String, Long, String, InlineKeyboardMarkup?) -> String = ::sendMessage,
     questionSender: (String, Long, Question) -> String = ::sendQuestion,
     callbackAnswerer: (String, String) -> String = ::answerCallbackQuery,
 ) {
     val chatId = update.message?.chat?.id ?: update.callbackQuery?.message?.chat?.id ?: return
-    val trainer = trainerProvider(chatId)
 
     if (update.message?.text != null) {
         messageSender(botToken, chatId, "Выберите действие:", mainMenuKeyboard)
@@ -271,24 +307,26 @@ fun handleUpdate(
         callbackAnswerer(botToken, callback.id)
         when {
             callback.data == CALLBACK_LEARN_WORDS ->
-                sendNextQuestion(botToken, chatId, trainer, messageSender, questionSender)
+                sendNextQuestion(botToken, chatId, trainerProvider(chatId), messageSender, questionSender)
 
             callback.data == CALLBACK_STATISTICS -> {
-                val responseText = formatStatistics(trainer.getStatistics())
+                val responseText = formatStatistics(trainerProvider(chatId).getStatistics())
                 messageSender(botToken, chatId, responseText, mainMenuKeyboard)
             }
 
             callback.data == CALLBACK_RESET_PROGRESS -> {
+                val trainer = trainerProvider(chatId)
                 trainer.resetProgress()
                 messageSender(botToken, chatId, "Прогресс сброшен.", mainMenuKeyboard)
             }
 
-            languageNamesByCallback[callback.data] != null -> {
-                val languageName = languageNamesByCallback.getValue(callback.data.orEmpty())
+            learningModeNamesByCallback[callback.data] != null -> {
+                learningModeSelector(chatId, callback.data.orEmpty())
+                val learningModeName = learningModeNamesByCallback.getValue(callback.data.orEmpty())
                 messageSender(
                     botToken,
                     chatId,
-                    "Выбран язык: $languageName",
+                    "Выбран раздел: $learningModeName",
                     mainMenuKeyboard,
                 )
             }
@@ -298,7 +336,7 @@ fun handleUpdate(
                     botToken = botToken,
                     chatId = chatId,
                     callbackData = callback.data,
-                    trainer = trainer,
+                    trainer = trainerProvider(chatId),
                     messageSender = messageSender,
                     questionSender = questionSender,
                 )

@@ -118,6 +118,51 @@ class YandexDictionaryTest {
     }
 
     @Test
+    fun `advanced dictionary loads phrases from yandex dictionary`() {
+        val advancedDictionary = loadAdvancedEnglishDictionary(
+            environment = mapOf(
+                YANDEX_DICTIONARY_API_KEY_ENV to "api-key",
+                YANDEX_DICTIONARY_PHRASES_ENV to "make a decision, pay attention",
+            ),
+            yandexDictionaryLoader = { apiKey, lang, phrases ->
+                assertEquals("api-key", apiKey)
+                assertEquals(YANDEX_DICTIONARY_DEFAULT_LANG, lang)
+                assertEquals(listOf("make a decision", "pay attention"), phrases)
+                listOf(
+                    Word("make a decision", "принять решение"),
+                    Word("pay attention", "обратить внимание"),
+                )
+            },
+        )
+
+        assertEquals(
+            listOf(
+                Word("make a decision", "принять решение"),
+                Word("pay attention", "обратить внимание"),
+            ),
+            advancedDictionary,
+        )
+    }
+
+    @Test
+    fun `advanced dictionary can use custom phrase direction`() {
+        val advancedDictionary = loadAdvancedEnglishDictionary(
+            environment = mapOf(
+                YANDEX_DICTIONARY_API_KEY_ENV to "api-key",
+                YANDEX_DICTIONARY_PHRASES_ENV to "make a decision",
+                YANDEX_DICTIONARY_PHRASES_LANG_ENV to "en-ru-custom",
+            ),
+            yandexDictionaryLoader = { _, lang, phrases ->
+                assertEquals("en-ru-custom", lang)
+                assertEquals(listOf("make a decision"), phrases)
+                listOf(Word("make a decision", "принять решение"))
+            },
+        )
+
+        assertEquals(listOf(Word("make a decision", "принять решение")), advancedDictionary)
+    }
+
+    @Test
     fun `initial dictionary requires yandex api key`() {
         val error = assertFailsWith<IllegalStateException> {
             loadInitialDictionary(
@@ -144,6 +189,22 @@ class YandexDictionaryTest {
 
         assertEquals(
             "Для загрузки словаря задайте $YANDEX_DICTIONARY_WORDS_ENV " +
+                "в переменных окружения или в $LOCAL_PROPERTIES_FILE_NAME.",
+            error.message,
+        )
+    }
+
+    @Test
+    fun `advanced dictionary requires configured phrases`() {
+        val error = assertFailsWith<IllegalStateException> {
+            loadAdvancedEnglishDictionary(
+                environment = mapOf(YANDEX_DICTIONARY_API_KEY_ENV to "api-key"),
+                localPropertiesFile = createPropertiesFile(""),
+            )
+        }
+
+        assertEquals(
+            "Для загрузки продвинутого словаря задайте $YANDEX_DICTIONARY_PHRASES_ENV " +
                 "в переменных окружения или в $LOCAL_PROPERTIES_FILE_NAME.",
             error.message,
         )
