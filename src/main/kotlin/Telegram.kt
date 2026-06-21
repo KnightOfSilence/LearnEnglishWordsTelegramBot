@@ -19,6 +19,7 @@ const val CALLBACK_STATISTICS = "statistics"
 const val CALLBACK_RESET_PROGRESS = "reset_progress"
 const val CALLBACK_ENGLISH_BEGINNER = "english_beginner"
 const val CALLBACK_ENGLISH_ADVANCED = "english_advanced"
+const val CALLBACK_LEGACY_ENGLISH = "language_english"
 const val CALLBACK_DATA_ANSWER_PREFIX = "answer_"
 const val CORRECT_ANSWER_EMOJI = "😊"
 const val INCORRECT_ANSWER_EMOJI = "😢"
@@ -124,6 +125,7 @@ val mainMenuKeyboard = InlineKeyboardMarkup(
 val learningModeNamesByCallback = mapOf(
     CALLBACK_ENGLISH_BEGINNER to "Английский начальный",
     CALLBACK_ENGLISH_ADVANCED to "Английский продвинутый",
+    CALLBACK_LEGACY_ENGLISH to "Английский начальный",
 )
 
 val botMenuCommands = listOf(
@@ -135,6 +137,13 @@ data class TrainerKey(
     val chatId: Long,
     val learningModeCallback: String,
 )
+
+fun normalizeLearningModeCallback(learningModeCallback: String): String =
+    if (learningModeCallback == CALLBACK_LEGACY_ENGLISH) {
+        CALLBACK_ENGLISH_BEGINNER
+    } else {
+        learningModeCallback
+    }
 
 fun main(args: Array<String>) {
     val botToken = resolveBotToken(args)
@@ -160,13 +169,15 @@ fun main(args: Array<String>) {
                 botToken = botToken,
                 update = update,
                 trainerProvider = { chatId ->
-                    val learningMode = selectedLearningModes[chatId] ?: CALLBACK_ENGLISH_BEGINNER
+                    val learningMode = normalizeLearningModeCallback(
+                        selectedLearningModes[chatId] ?: CALLBACK_ENGLISH_BEGINNER,
+                    )
                     trainers.getOrPut(TrainerKey(chatId, learningMode)) {
                         createTrainerForChat(chatId, learningMode)
                     }
                 },
                 learningModeSelector = { chatId, learningMode ->
-                    selectedLearningModes[chatId] = learningMode
+                    selectedLearningModes[chatId] = normalizeLearningModeCallback(learningMode)
                 },
             )
         }
@@ -185,10 +196,11 @@ fun createTrainerForChat(
         loadInitialDictionaryForLearningMode(selectedLearningMode, environment, localPropertiesFile)
     },
 ): LearnWordsTrainer {
-    val progressFile = createProgressFileForChat(chatId, learningModeCallback, progressDirectory)
+    val normalizedLearningModeCallback = normalizeLearningModeCallback(learningModeCallback)
+    val progressFile = createProgressFileForChat(chatId, normalizedLearningModeCallback, progressDirectory)
     if (!progressFile.exists()) {
         progressFile.parentFile?.mkdirs()
-        val initialDictionary = initialDictionaryLoader(learningModeCallback)
+        val initialDictionary = initialDictionaryLoader(normalizedLearningModeCallback)
         progressFile.writeText(
             initialDictionary.joinToString(
                 separator = "\n",
@@ -204,7 +216,7 @@ fun loadInitialDictionaryForLearningMode(
     environment: Map<String, String> = System.getenv(),
     localPropertiesFile: File = File(LOCAL_PROPERTIES_FILE_NAME),
 ): List<Word> =
-    if (learningModeCallback == CALLBACK_ENGLISH_ADVANCED) {
+    if (normalizeLearningModeCallback(learningModeCallback) == CALLBACK_ENGLISH_ADVANCED) {
         loadAdvancedEnglishDictionary(environment, localPropertiesFile)
     } else {
         loadInitialDictionary(environment, localPropertiesFile)
@@ -215,7 +227,8 @@ fun createProgressFileForChat(
     learningModeCallback: String = CALLBACK_ENGLISH_BEGINNER,
     progressDirectory: File = File("user-progress"),
 ): File {
-    val fileName = if (learningModeCallback == CALLBACK_ENGLISH_ADVANCED) {
+    val normalizedLearningModeCallback = normalizeLearningModeCallback(learningModeCallback)
+    val fileName = if (normalizedLearningModeCallback == CALLBACK_ENGLISH_ADVANCED) {
         "$chatId-advanced.txt"
     } else {
         "$chatId.txt"
@@ -304,6 +317,7 @@ fun handleUpdate(
     }
 
     update.callbackQuery?.let { callback ->
+        callback.data?.let { println("Получен callback: $it") }
         callbackAnswerer(botToken, callback.id)
         when {
             callback.data == CALLBACK_LEARN_WORDS ->
@@ -321,12 +335,13 @@ fun handleUpdate(
             }
 
             learningModeNamesByCallback[callback.data] != null -> {
-                learningModeSelector(chatId, callback.data.orEmpty())
-                val learningModeName = learningModeNamesByCallback.getValue(callback.data.orEmpty())
+                val callbackData = callback.data.orEmpty()
+                learningModeSelector(chatId, normalizeLearningModeCallback(callbackData))
+                val learningModeName = learningModeNamesByCallback.getValue(callbackData)
                 messageSender(
                     botToken,
                     chatId,
-                    "Выбран раздел: $learningModeName",
+                    "Выбран раздел: $learningModeName. Нажмите «Учиться», чтобы начать.",
                     mainMenuKeyboard,
                 )
             }

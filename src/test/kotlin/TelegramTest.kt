@@ -459,9 +459,49 @@ class TelegramTest {
 
         assertEquals(1, sentMessages.size)
         assertEquals(1005L, sentMessages.single().first)
-        assertEquals("Выбран раздел: Английский продвинутый", sentMessages.single().second)
+        assertEquals(
+            "Выбран раздел: Английский продвинутый. Нажмите «Учиться», чтобы начать.",
+            sentMessages.single().second,
+        )
         assertEquals(mainMenuKeyboard, sentMessages.single().third)
         assertEquals(listOf(1005L to CALLBACK_ENGLISH_ADVANCED), selectedModes)
+    }
+
+    @Test
+    fun `legacy english callback selects beginner section`() {
+        val trainer = createTrainer("cat|кошка|0")
+        val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+        val selectedModes = mutableListOf<Pair<Long, String>>()
+
+        handleUpdate(
+            botToken = "token",
+            update = TelegramUpdate(
+                updateId = 40,
+                callbackQuery = TelegramCallbackQuery(
+                    id = "callback-40",
+                    data = CALLBACK_LEGACY_ENGLISH,
+                    message = TelegramMessage(TelegramChat(1006), "Выберите действие:"),
+                ),
+            ),
+            trainerProvider = { trainer },
+            learningModeSelector = { chatId, mode ->
+                selectedModes += chatId to mode
+            },
+            messageSender = { _, chatId, text, keyboard ->
+                sentMessages += Triple(chatId, text, keyboard)
+                "{}"
+            },
+            callbackAnswerer = { _, _ -> "true" },
+        )
+
+        assertEquals(1, sentMessages.size)
+        assertEquals(1006L, sentMessages.single().first)
+        assertEquals(
+            "Выбран раздел: Английский начальный. Нажмите «Учиться», чтобы начать.",
+            sentMessages.single().second,
+        )
+        assertEquals(mainMenuKeyboard, sentMessages.single().third)
+        assertEquals(listOf(1006L to CALLBACK_ENGLISH_BEGINNER), selectedModes)
     }
 
     @Test
