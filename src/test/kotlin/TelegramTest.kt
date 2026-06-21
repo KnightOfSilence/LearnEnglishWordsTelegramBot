@@ -217,7 +217,65 @@ class TelegramTest {
 
         assertEquals(1, sentMessages.size)
         assertEquals(-999L, sentMessages.single().first)
-        assertEquals("Выберите действие:", sentMessages.single().second)
+        assertEquals(MAIN_MENU_TEXT, sentMessages.single().second)
+        assertEquals(mainMenuKeyboard, sentMessages.single().third)
+    }
+
+    @Test
+    fun `select language callback shows language menu`() {
+        val trainer = createTrainer("cat|кошка|0")
+        val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+
+        handleUpdate(
+            botToken = "token",
+            update = TelegramUpdate(
+                updateId = 33,
+                callbackQuery = TelegramCallbackQuery(
+                    id = "callback-33",
+                    data = CALLBACK_SELECT_LANGUAGE,
+                    message = TelegramMessage(TelegramChat(999), MAIN_MENU_TEXT),
+                ),
+            ),
+            trainerProvider = { trainer },
+            messageSender = { _, chatId, text, keyboard ->
+                sentMessages += Triple(chatId, text, keyboard)
+                "{}"
+            },
+            callbackAnswerer = { _, _ -> "true" },
+        )
+
+        assertEquals(1, sentMessages.size)
+        assertEquals(999L, sentMessages.single().first)
+        assertEquals(LANGUAGE_MENU_TEXT, sentMessages.single().second)
+        assertEquals(languageMenuKeyboard, sentMessages.single().third)
+    }
+
+    @Test
+    fun `main menu callback returns to main screen`() {
+        val trainer = createTrainer("cat|кошка|0")
+        val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+
+        handleUpdate(
+            botToken = "token",
+            update = TelegramUpdate(
+                updateId = 34,
+                callbackQuery = TelegramCallbackQuery(
+                    id = "callback-34",
+                    data = CALLBACK_MAIN_MENU,
+                    message = TelegramMessage(TelegramChat(1000), LANGUAGE_MENU_TEXT),
+                ),
+            ),
+            trainerProvider = { trainer },
+            messageSender = { _, chatId, text, keyboard ->
+                sentMessages += Triple(chatId, text, keyboard)
+                "{}"
+            },
+            callbackAnswerer = { _, _ -> "true" },
+        )
+
+        assertEquals(1, sentMessages.size)
+        assertEquals(1000L, sentMessages.single().first)
+        assertEquals(MAIN_MENU_TEXT, sentMessages.single().second)
         assertEquals(mainMenuKeyboard, sentMessages.single().third)
     }
 
@@ -396,7 +454,7 @@ class TelegramTest {
 
         assertEquals(1, sentMessages.size)
         assertEquals(1003L, sentMessages.single().first)
-        assertEquals("Сначала выберите «Учить слова».", sentMessages.single().second)
+        assertEquals("Сначала выберите язык.", sentMessages.single().second)
         assertEquals(mainMenuKeyboard, sentMessages.single().third)
     }
 
@@ -434,6 +492,7 @@ class TelegramTest {
     fun `learning mode callback confirms selected section`() {
         val trainer = createTrainer("cat|кошка|0")
         val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+        val sentQuestions = mutableListOf<Pair<Long, Question>>()
         val selectedModes = mutableListOf<Pair<Long, String>>()
 
         handleUpdate(
@@ -454,16 +513,20 @@ class TelegramTest {
                 sentMessages += Triple(chatId, text, keyboard)
                 "{}"
             },
+            questionSender = { _, chatId, question ->
+                sentQuestions += chatId to question
+                "{}"
+            },
             callbackAnswerer = { _, _ -> "true" },
         )
 
         assertEquals(1, sentMessages.size)
         assertEquals(1005L, sentMessages.single().first)
-        assertEquals(
-            "Выбран раздел: Английский продвинутый. Нажмите «Учиться», чтобы начать.",
-            sentMessages.single().second,
-        )
-        assertEquals(mainMenuKeyboard, sentMessages.single().third)
+        assertEquals("Выбран раздел: Английский продвинутый", sentMessages.single().second)
+        assertEquals(null, sentMessages.single().third)
+        assertEquals(1, sentQuestions.size)
+        assertEquals(1005L, sentQuestions.single().first)
+        assertEquals(trainer.currentQuestion, sentQuestions.single().second)
         assertEquals(listOf(1005L to CALLBACK_ENGLISH_ADVANCED), selectedModes)
     }
 
@@ -471,6 +534,7 @@ class TelegramTest {
     fun `legacy english callback selects beginner section`() {
         val trainer = createTrainer("cat|кошка|0")
         val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+        val sentQuestions = mutableListOf<Pair<Long, Question>>()
         val selectedModes = mutableListOf<Pair<Long, String>>()
 
         handleUpdate(
@@ -491,16 +555,20 @@ class TelegramTest {
                 sentMessages += Triple(chatId, text, keyboard)
                 "{}"
             },
+            questionSender = { _, chatId, question ->
+                sentQuestions += chatId to question
+                "{}"
+            },
             callbackAnswerer = { _, _ -> "true" },
         )
 
         assertEquals(1, sentMessages.size)
         assertEquals(1006L, sentMessages.single().first)
-        assertEquals(
-            "Выбран раздел: Английский начальный. Нажмите «Учиться», чтобы начать.",
-            sentMessages.single().second,
-        )
-        assertEquals(mainMenuKeyboard, sentMessages.single().third)
+        assertEquals("Выбран раздел: Английский начальный", sentMessages.single().second)
+        assertEquals(null, sentMessages.single().third)
+        assertEquals(1, sentQuestions.size)
+        assertEquals(1006L, sentQuestions.single().first)
+        assertEquals(trainer.currentQuestion, sentQuestions.single().second)
         assertEquals(listOf(1006L to CALLBACK_ENGLISH_BEGINNER), selectedModes)
     }
 
@@ -680,13 +748,19 @@ class TelegramTest {
     fun `send message request serializes inline keyboard as reply markup`() {
         val request = createSendMessageRequest("token", 123, "Меню", mainMenuKeyboard)
         val parameters = parseFormBody(readBody(request))
+        val languageRequest = createSendMessageRequest("token", 123, "Язык", languageMenuKeyboard)
+        val languageParameters = parseFormBody(readBody(languageRequest))
 
         assertEquals("123", parameters["chat_id"])
         assertEquals("Меню", parameters["text"])
         assertEquals("true", parameters["disable_notification"])
         assertEquals(
-            """{"inline_keyboard":[[{"text":"Учиться","callback_data":"learn_words"}],[{"text":"Статистика","callback_data":"statistics"}],[{"text":"1. Английский начальный","callback_data":"english_beginner"}],[{"text":"2. Английский продвинутый","callback_data":"english_advanced"}],[{"text":"Сбросить прогресс","callback_data":"reset_progress"}]]}""",
+            """{"inline_keyboard":[[{"text":"Выбрать язык","callback_data":"select_language"}],[{"text":"Статистика","callback_data":"statistics"}],[{"text":"Сбросить прогресс","callback_data":"reset_progress"}]]}""",
             parameters["reply_markup"],
+        )
+        assertEquals(
+            """{"inline_keyboard":[[{"text":"Английский начальный","callback_data":"english_beginner"}],[{"text":"Английский продвинутый","callback_data":"english_advanced"}],[{"text":"Главный экран","callback_data":"main_menu"}]]}""",
+            languageParameters["reply_markup"],
         )
     }
 
@@ -723,6 +797,7 @@ class TelegramTest {
             InlineKeyboardMarkup(listOf(emptyList()))
         }
         assertTrue(mainMenuKeyboard.inlineKeyboard.flatten().isNotEmpty())
+        assertTrue(languageMenuKeyboard.inlineKeyboard.flatten().isNotEmpty())
     }
 
     private fun parseFormBody(body: String): Map<String, String> =

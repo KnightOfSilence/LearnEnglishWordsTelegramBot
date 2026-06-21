@@ -15,6 +15,8 @@ const val TELEGRAM_MESSAGE_MAX_LENGTH = 4096
 const val TELEGRAM_CALLBACK_DATA_MAX_BYTES = 64
 const val TELEGRAM_DISABLE_NOTIFICATION = true
 const val CALLBACK_LEARN_WORDS = "learn_words"
+const val CALLBACK_SELECT_LANGUAGE = "select_language"
+const val CALLBACK_MAIN_MENU = "main_menu"
 const val CALLBACK_STATISTICS = "statistics"
 const val CALLBACK_RESET_PROGRESS = "reset_progress"
 const val CALLBACK_ENGLISH_BEGINNER = "english_beginner"
@@ -25,6 +27,8 @@ const val CORRECT_ANSWER_EMOJI = "😊"
 const val INCORRECT_ANSWER_EMOJI = "😢"
 const val COMMAND_START = "start"
 const val COMMAND_MENU = "menu"
+const val MAIN_MENU_TEXT = "Главный экран:"
+const val LANGUAGE_MENU_TEXT = "Выберите язык:"
 
 private val telegramHttpClient: HttpClient = HttpClient.newHttpClient()
 private val telegramJson = Json { ignoreUnknownKeys = true }
@@ -114,11 +118,17 @@ data class InlineKeyboardMarkup(
 
 val mainMenuKeyboard = InlineKeyboardMarkup(
     inlineKeyboard = listOf(
-        listOf(InlineKeyboardButton("Учиться", CALLBACK_LEARN_WORDS)),
+        listOf(InlineKeyboardButton("Выбрать язык", CALLBACK_SELECT_LANGUAGE)),
         listOf(InlineKeyboardButton("Статистика", CALLBACK_STATISTICS)),
-        listOf(InlineKeyboardButton("1. Английский начальный", CALLBACK_ENGLISH_BEGINNER)),
-        listOf(InlineKeyboardButton("2. Английский продвинутый", CALLBACK_ENGLISH_ADVANCED)),
         listOf(InlineKeyboardButton("Сбросить прогресс", CALLBACK_RESET_PROGRESS)),
+    ),
+)
+
+val languageMenuKeyboard = InlineKeyboardMarkup(
+    inlineKeyboard = listOf(
+        listOf(InlineKeyboardButton("Английский начальный", CALLBACK_ENGLISH_BEGINNER)),
+        listOf(InlineKeyboardButton("Английский продвинутый", CALLBACK_ENGLISH_ADVANCED)),
+        listOf(InlineKeyboardButton("Главный экран", CALLBACK_MAIN_MENU)),
     ),
 )
 
@@ -313,13 +323,19 @@ fun handleUpdate(
     val chatId = update.message?.chat?.id ?: update.callbackQuery?.message?.chat?.id ?: return
 
     if (update.message?.text != null) {
-        messageSender(botToken, chatId, "Выберите действие:", mainMenuKeyboard)
+        messageSender(botToken, chatId, MAIN_MENU_TEXT, mainMenuKeyboard)
     }
 
     update.callbackQuery?.let { callback ->
         callback.data?.let { println("Получен callback: $it") }
         callbackAnswerer(botToken, callback.id)
         when {
+            callback.data == CALLBACK_SELECT_LANGUAGE ->
+                messageSender(botToken, chatId, LANGUAGE_MENU_TEXT, languageMenuKeyboard)
+
+            callback.data == CALLBACK_MAIN_MENU ->
+                messageSender(botToken, chatId, MAIN_MENU_TEXT, mainMenuKeyboard)
+
             callback.data == CALLBACK_LEARN_WORDS ->
                 sendNextQuestion(botToken, chatId, trainerProvider(chatId), messageSender, questionSender)
 
@@ -341,9 +357,10 @@ fun handleUpdate(
                 messageSender(
                     botToken,
                     chatId,
-                    "Выбран раздел: $learningModeName. Нажмите «Учиться», чтобы начать.",
-                    mainMenuKeyboard,
+                    "Выбран раздел: $learningModeName",
+                    null,
                 )
+                sendNextQuestion(botToken, chatId, trainerProvider(chatId), messageSender, questionSender)
             }
 
             callback.data?.startsWith(CALLBACK_DATA_ANSWER_PREFIX) == true ->
@@ -376,7 +393,7 @@ private fun handleAnswer(
         messageSender(
             botToken,
             chatId,
-            "Сначала выберите «Учить слова».",
+            "Сначала выберите язык.",
             mainMenuKeyboard,
         )
         return
