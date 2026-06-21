@@ -137,7 +137,7 @@ class TelegramTest {
                   "update_id": 30,
                   "callback_query": {
                     "id": "callback-123",
-                    "data": "learn_words",
+                    "data": "select_language",
                     "message": {
                       "chat": {"id": 777},
                       "text": "Выберите действие:"
@@ -151,7 +151,7 @@ class TelegramTest {
 
         val callback = response.result.single().callbackQuery
         assertEquals("callback-123", callback?.id)
-        assertEquals(CALLBACK_LEARN_WORDS, callback?.data)
+        assertEquals(CALLBACK_SELECT_LANGUAGE, callback?.data)
         assertEquals(777L, callback?.message?.chat?.id)
     }
 
@@ -276,71 +276,6 @@ class TelegramTest {
         assertEquals(1, sentMessages.size)
         assertEquals(1000L, sentMessages.single().first)
         assertEquals(MAIN_MENU_TEXT, sentMessages.single().second)
-        assertEquals(mainMenuKeyboard, sentMessages.single().third)
-    }
-
-    @Test
-    fun `learn words callback sends next question to source chat`() {
-        val trainer = createTrainer(
-            """
-            cat|кошка|0
-            dog|собака|0
-            house|дом|0
-            """.trimIndent(),
-        )
-        val sentQuestions = mutableListOf<Pair<Long, Question>>()
-        val update = TelegramUpdate(
-            updateId = 33,
-            callbackQuery = TelegramCallbackQuery(
-                id = "callback-33",
-                data = CALLBACK_LEARN_WORDS,
-                message = TelegramMessage(TelegramChat(999), "Выберите действие:"),
-            ),
-        )
-
-        handleUpdate(
-            botToken = "token",
-            update = update,
-            trainerProvider = { trainer },
-            questionSender = { _, chatId, question ->
-                sentQuestions += chatId to question
-                "{}"
-            },
-            callbackAnswerer = { _, _ -> "true" },
-        )
-
-        assertEquals(1, sentQuestions.size)
-        assertEquals(999L, sentQuestions.single().first)
-        assertEquals(trainer.currentQuestion, sentQuestions.single().second)
-    }
-
-    @Test
-    fun `learn words callback reports when all words are learned`() {
-        val trainer = createTrainer("cat|кошка|3")
-        val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
-        val update = TelegramUpdate(
-            updateId = 34,
-            callbackQuery = TelegramCallbackQuery(
-                id = "callback-34",
-                data = CALLBACK_LEARN_WORDS,
-                message = TelegramMessage(TelegramChat(1000), "Выберите действие:"),
-            ),
-        )
-
-        handleUpdate(
-            botToken = "token",
-            update = update,
-            trainerProvider = { trainer },
-            messageSender = { _, chatId, text, keyboard ->
-                sentMessages += Triple(chatId, text, keyboard)
-                "{}"
-            },
-            callbackAnswerer = { _, _ -> "true" },
-        )
-
-        assertEquals(1, sentMessages.size)
-        assertEquals(1000L, sentMessages.single().first)
-        assertEquals("Вы выучили все слова в базе", sentMessages.single().second)
         assertEquals(mainMenuKeyboard, sentMessages.single().third)
     }
 
@@ -528,6 +463,38 @@ class TelegramTest {
         assertEquals(1005L, sentQuestions.single().first)
         assertEquals(trainer.currentQuestion, sentQuestions.single().second)
         assertEquals(listOf(1005L to CALLBACK_ENGLISH_ADVANCED), selectedModes)
+    }
+
+    @Test
+    fun `learning mode callback reports when all words are learned`() {
+        val trainer = createTrainer("cat|кошка|3")
+        val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+
+        handleUpdate(
+            botToken = "token",
+            update = TelegramUpdate(
+                updateId = 40,
+                callbackQuery = TelegramCallbackQuery(
+                    id = "callback-40",
+                    data = CALLBACK_ENGLISH_BEGINNER,
+                    message = TelegramMessage(TelegramChat(1006), LANGUAGE_MENU_TEXT),
+                ),
+            ),
+            trainerProvider = { trainer },
+            messageSender = { _, chatId, text, keyboard ->
+                sentMessages += Triple(chatId, text, keyboard)
+                "{}"
+            },
+            callbackAnswerer = { _, _ -> "true" },
+        )
+
+        assertEquals(2, sentMessages.size)
+        assertEquals(1006L, sentMessages[0].first)
+        assertEquals("Выбран раздел: Английский начальный", sentMessages[0].second)
+        assertEquals(null, sentMessages[0].third)
+        assertEquals(1006L, sentMessages[1].first)
+        assertEquals("Вы выучили все слова в базе", sentMessages[1].second)
+        assertEquals(mainMenuKeyboard, sentMessages[1].third)
     }
 
     @Test

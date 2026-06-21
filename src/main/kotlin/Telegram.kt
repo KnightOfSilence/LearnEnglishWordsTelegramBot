@@ -14,7 +14,6 @@ const val TELEGRAM_BASE_URL = "https://api.telegram.org"
 const val TELEGRAM_MESSAGE_MAX_LENGTH = 4096
 const val TELEGRAM_CALLBACK_DATA_MAX_BYTES = 64
 const val TELEGRAM_DISABLE_NOTIFICATION = true
-const val CALLBACK_LEARN_WORDS = "learn_words"
 const val CALLBACK_SELECT_LANGUAGE = "select_language"
 const val CALLBACK_MAIN_MENU = "main_menu"
 const val CALLBACK_STATISTICS = "statistics"
@@ -335,9 +334,6 @@ fun handleUpdate(
 
             callback.data == CALLBACK_MAIN_MENU ->
                 messageSender(botToken, chatId, MAIN_MENU_TEXT, mainMenuKeyboard)
-
-            callback.data == CALLBACK_LEARN_WORDS ->
-                sendNextQuestion(botToken, chatId, trainerProvider(chatId), messageSender, questionSender)
 
             callback.data == CALLBACK_STATISTICS -> {
                 val responseText = formatStatistics(trainerProvider(chatId).getStatistics())
