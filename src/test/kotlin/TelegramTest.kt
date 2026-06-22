@@ -466,9 +466,10 @@ class TelegramTest {
     }
 
     @Test
-    fun `learning mode callback reports when all words are learned`() {
+    fun `learning mode callback restarts completed section`() {
         val trainer = createTrainer("cat|кошка|3")
         val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+        val sentQuestions = mutableListOf<Pair<Long, Question>>()
 
         handleUpdate(
             botToken = "token",
@@ -485,16 +486,24 @@ class TelegramTest {
                 sentMessages += Triple(chatId, text, keyboard)
                 "{}"
             },
+            questionSender = { _, chatId, question ->
+                sentQuestions += chatId to question
+                "{}"
+            },
             callbackAnswerer = { _, _ -> "true" },
         )
 
-        assertEquals(2, sentMessages.size)
-        assertEquals(1006L, sentMessages[0].first)
-        assertEquals("Выбран раздел: Английский начальный", sentMessages[0].second)
-        assertEquals(null, sentMessages[0].third)
-        assertEquals(1006L, sentMessages[1].first)
-        assertEquals("Вы выучили все слова в базе", sentMessages[1].second)
-        assertEquals(mainMenuKeyboard, sentMessages[1].third)
+        assertEquals(1, sentMessages.size)
+        assertEquals(1006L, sentMessages.single().first)
+        assertEquals(
+            "Раздел «Английский начальный» уже пройден. Начинаем заново.",
+            sentMessages.single().second,
+        )
+        assertEquals(null, sentMessages.single().third)
+        assertEquals(0, trainer.dictionary.single().correctAnswersCount)
+        assertEquals(1, sentQuestions.size)
+        assertEquals(1006L, sentQuestions.single().first)
+        assertEquals(trainer.currentQuestion, sentQuestions.single().second)
     }
 
     @Test

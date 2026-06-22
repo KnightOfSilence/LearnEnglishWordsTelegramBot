@@ -350,13 +350,24 @@ fun handleUpdate(
                 val callbackData = callback.data.orEmpty()
                 learningModeSelector(chatId, normalizeLearningModeCallback(callbackData))
                 val learningModeName = learningModeNamesByCallback.getValue(callbackData)
+                val trainer = trainerProvider(chatId)
+                val statistics = trainer.getStatistics()
+                val restartCompletedSection =
+                    statistics.totalWords > 0 && statistics.learnedWords == statistics.totalWords
+                if (restartCompletedSection) {
+                    trainer.resetProgress()
+                }
                 messageSender(
                     botToken,
                     chatId,
-                    "Выбран раздел: $learningModeName",
+                    if (restartCompletedSection) {
+                        "Раздел «$learningModeName» уже пройден. Начинаем заново."
+                    } else {
+                        "Выбран раздел: $learningModeName"
+                    },
                     null,
                 )
-                sendNextQuestion(botToken, chatId, trainerProvider(chatId), messageSender, questionSender)
+                sendNextQuestion(botToken, chatId, trainer, messageSender, questionSender)
             }
 
             callback.data?.startsWith(CALLBACK_DATA_ANSWER_PREFIX) == true ->
