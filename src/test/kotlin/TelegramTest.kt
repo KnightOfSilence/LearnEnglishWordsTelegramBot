@@ -121,7 +121,7 @@ class TelegramTest {
             request.uri().toString(),
         )
         assertEquals(
-            """[{"command":"start","description":"Показать меню"},{"command":"menu","description":"Показать меню"}]""",
+            """[{"command":"menu","description":"Показать меню"}]""",
             parameters["commands"],
         )
     }
@@ -201,7 +201,7 @@ class TelegramTest {
         val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
         val update = TelegramUpdate(
             updateId = 32,
-            message = TelegramMessage(TelegramChat(-999), "/start"),
+            message = TelegramMessage(TelegramChat(-999), "/menu"),
         )
         val trainer = createTrainer("cat|кошка|0")
 
@@ -219,6 +219,32 @@ class TelegramTest {
         assertEquals(-999L, sentMessages.single().first)
         assertEquals(MAIN_MENU_TEXT, sentMessages.single().second)
         assertEquals(mainMenuKeyboard, sentMessages.single().third)
+    }
+
+    @Test
+    fun `start command is ignored`() {
+        val sentMessages = mutableListOf<Triple<Long, String, InlineKeyboardMarkup?>>()
+        val trainer = createTrainer("cat|кошка|0")
+
+        handleUpdate(
+            botToken = "token",
+            update = TelegramUpdate(
+                updateId = 33,
+                message = TelegramMessage(TelegramChat(-999), "/start"),
+            ),
+            trainerProvider = { trainer },
+            messageSender = { _, chatId, text, keyboard ->
+                sentMessages += Triple(chatId, text, keyboard)
+                "{}"
+            },
+        )
+
+        assertEquals(emptyList(), sentMessages)
+    }
+
+    @Test
+    fun `start command with bot username is ignored`() {
+        assertTrue(isTelegramCommand("/start@LearnEnglishWordsBot", "start"))
     }
 
     @Test

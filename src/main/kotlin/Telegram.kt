@@ -24,7 +24,6 @@ const val CALLBACK_LEGACY_ENGLISH = "language_english"
 const val CALLBACK_DATA_ANSWER_PREFIX = "answer_"
 const val CORRECT_ANSWER_EMOJI = "😊"
 const val INCORRECT_ANSWER_EMOJI = "😢"
-const val COMMAND_START = "start"
 const val COMMAND_MENU = "menu"
 const val MAIN_MENU_TEXT = "Главный экран:"
 const val LANGUAGE_MENU_TEXT = "Выберите язык:"
@@ -138,7 +137,6 @@ val learningModeNamesByCallback = mapOf(
 )
 
 val botMenuCommands = listOf(
-    TelegramBotCommand(COMMAND_START, "Показать меню"),
     TelegramBotCommand(COMMAND_MENU, "Показать меню"),
 )
 
@@ -154,6 +152,11 @@ fun normalizeLearningModeCallback(learningModeCallback: String): String =
         learningModeCallback
     }
 
+fun isTelegramCommand(text: String, command: String): Boolean {
+    val normalizedText = text.trim().substringBefore(" ")
+    return normalizedText == "/$command" || normalizedText.startsWith("/$command@")
+}
+
 fun main(args: Array<String>) {
     val botToken = resolveBotToken(args)
     val selectedLearningModes = mutableMapOf<Long, String>()
@@ -161,8 +164,8 @@ fun main(args: Array<String>) {
     var updateId = 0L
 
     setBotCommands(botToken)
-    println("Бот запущен. Отправьте сообщение или /start вашему боту в Telegram.")
-    println("Меню команд Telegram обновлено: /start, /menu.")
+    println("Бот запущен. Отправьте сообщение или /menu вашему боту в Telegram.")
+    println("Меню команд Telegram обновлено: /menu.")
     println("Для остановки нажмите Ctrl+C.")
 
     while (true) {
@@ -321,7 +324,8 @@ fun handleUpdate(
 ) {
     val chatId = update.message?.chat?.id ?: update.callbackQuery?.message?.chat?.id ?: return
 
-    if (update.message?.text != null) {
+    val messageText = update.message?.text
+    if (messageText != null && !isTelegramCommand(messageText, "start")) {
         messageSender(botToken, chatId, MAIN_MENU_TEXT, mainMenuKeyboard)
     }
 
